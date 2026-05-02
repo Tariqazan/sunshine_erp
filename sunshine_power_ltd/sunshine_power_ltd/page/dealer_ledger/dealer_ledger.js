@@ -348,20 +348,29 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 							<tr>
 								<th class="text-left">Item Name</th>
 								<th class="num">Qty</th>
+								<th class="num">Purchase Price</th>
+								<th class="num">Total Purchase</th>
 								<th class="num">Reg. Price</th>
 								<th class="num">Run. Price</th>
 								<th class="num">Amount</th>
 								<th class="num">Comm.</th>
 							</tr>
-							${r.items.map(i => `
-							<tr>
-								<td class="text-left">${esc(i.item_name)}</td>
-								<td class="num">${esc(i.qty)}</td>
-								<td class="num">${esc(fmt_cur(i.regular_price))}</td>
-								<td class="num">${esc(fmt_cur(i.running_price))}</td>
-								<td class="num" style="font-weight:600; color:#1f2937;">${esc(fmt_cur(i.amount))}</td>
-								<td class="num">${esc(fmt_cur(i.commission_amount))}</td>
-							</tr>`).join("")}
+							${(() => {
+								return r.items.map(i => {
+									const tp = i.purchase_price ? (i.qty * i.purchase_price) : 0;
+									return `
+										<tr>
+											<td class="text-left">${esc(i.item_name)}</td>
+											<td class="num">${esc(i.qty)}</td>
+											<td class="num" style="color:#6b7280;">${i.purchase_price ? esc(fmt_cur(i.purchase_price)) : '<span style="color:#d1d5db;">—</span>'}</td>
+											<td class="num" style="color:#7c3aed; font-weight:600;">${tp ? esc(fmt_cur(tp)) : '<span style="color:#d1d5db;">—</span>'}</td>
+											<td class="num">${esc(fmt_cur(i.regular_price))}</td>
+											<td class="num">${esc(fmt_cur(i.running_price))}</td>
+											<td class="num" style="font-weight:600; color:#1f2937;">${esc(fmt_cur(i.amount))}</td>
+											<td class="num">${esc(fmt_cur(i.commission_amount))}</td>
+										</tr>`;
+								}).join("");
+							})()}
 						</table>
 					</div>
 				</div>
@@ -412,6 +421,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 				<td class="num"></td>
 				<td class="num"></td>
 				<td class="num" style="font-weight:700; color:#1f2937;">${esc(fmt_cur(r.total_selling_price))}</td>
+				<td class="num" style="font-weight:600; color:#7c3aed;">${r.total_purchase_price ? esc(fmt_cur(r.total_purchase_price)) : '<span style="color:#d1d5db;">—</span>'}</td>
 				<td class="num">${esc(fmt_cur(r.total_commission))}</td>
 				
 				<td>${esc(r.deposit_slip_no)}</td>
@@ -427,7 +437,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 				<td>${esc(r.owner_name)}</td>
 			</tr>
 			<tr class="child-row" id="child-${esc(r.invoice_name)}" style="display: none;">
-				<td colspan="19">
+				<td colspan="20">
 					<div class="child-container">
 						<div class="dl-child-grid">
 							${items_html}
@@ -444,7 +454,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 			<thead>
 				<tr class="dl-group-row">
 					<th colspan="4" style="background:#f8fafc;">Common</th>
-					<th colspan="6" style="background:#f0fdf4; color:#166534;">Sales Totals</th>
+					<th colspan="7" style="background:#f0fdf4; color:#166534;">Sales Totals</th>
 					<th colspan="6" style="background:#eff6ff; color:#1e40af;">Deposit Totals</th>
 					<th colspan="1" style="background:#f8fafc;">Balance</th>
 					<th colspan="2" style="background:#f8fafc;">Dealer Info</th>
@@ -460,6 +470,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 					<th class="num">Regular Price</th>
 					<th class="num">Running Price</th>
 					<th class="num">Total Selling Price</th>
+					<th class="num" style="color:#7c3aed;">Total Purchase</th>
 					<th class="num">Commission Tk/Pcs</th>
 					
 					<th>Deposit Slip No / Txn ID</th>

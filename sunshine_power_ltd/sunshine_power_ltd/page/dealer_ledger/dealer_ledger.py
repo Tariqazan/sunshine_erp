@@ -51,7 +51,8 @@ def get_dealer_ledger(customer=None, from_date=None, to_date=None, start=0, limi
         filters={"parent": ["in", invoice_names]},
         fields=[
             "parent", "item_code", "item_name", "qty", "rate", "amount",
-            "custom_running_price", "custom_commission_amount", "idx"
+            "custom_running_price", "custom_commission_amount",
+            "custom_purchase_price", "idx"
         ],
         order_by="parent asc, idx asc",
     )
@@ -128,6 +129,11 @@ def get_dealer_ledger(customer=None, from_date=None, to_date=None, start=0, limi
         total_qty = sum(_flt(i.qty) for i in inv_items)
         total_selling_price = sum(_flt(i.amount) for i in inv_items)
         total_commission = sum(_flt(i.custom_commission_amount) for i in inv_items)
+        total_purchase_price = sum(
+            _flt(i.qty) * _flt(i.custom_purchase_price)
+            for i in inv_items
+            if i.custom_purchase_price
+        )
         
         total_deposit = sum(_flt(p["deposit_amount"]) for p in inv_payments)
         total_charge = sum(_flt(p["bank_charge"]) for p in inv_payments)
@@ -153,6 +159,7 @@ def get_dealer_ledger(customer=None, from_date=None, to_date=None, start=0, limi
             
             "total_qty": total_qty,
             "total_selling_price": total_selling_price,
+            "total_purchase_price": total_purchase_price,
             "total_commission": total_commission,
             
             "deposit_slip_no": ", ".join(deposit_slips),
@@ -176,6 +183,7 @@ def get_dealer_ledger(customer=None, from_date=None, to_date=None, start=0, limi
                 "qty": _flt(i.qty),
                 "regular_price": regular_price,
                 "running_price": running_price,
+                "purchase_price": _flt(i.custom_purchase_price),
                 "amount": _flt(i.amount),
                 "commission_amount": _flt(i.custom_commission_amount)
             })
