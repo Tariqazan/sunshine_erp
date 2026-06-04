@@ -129,6 +129,7 @@ permission_query_conditions = {
 has_permission = {
 	"Sales Invoice": "sunshine_power_ltd.permissions.has_sales_invoice_permission",
 	"Journal Entry": "sunshine_power_ltd.permissions.has_journal_entry_permission",
+	"Payment Entry": "sunshine_power_ltd.permissions.has_payment_entry_permission",
 }
 
 # Document Events
@@ -139,6 +140,10 @@ doc_events = {
 	"Journal Entry": {
 		"validate": "sunshine_power_ltd.permissions.validate_journal_entry_admin",
 		"before_submit": "sunshine_power_ltd.permissions.before_submit_journal_entry_admin",
+	},
+	"Payment Entry": {
+		"validate": "sunshine_power_ltd.permissions.validate_payment_entry_accountant",
+		"before_submit": "sunshine_power_ltd.permissions.before_submit_payment_entry_accountant",
 	},
 	"Sales Invoice": {
 		"validate": [

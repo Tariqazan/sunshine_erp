@@ -21,6 +21,15 @@ JOURNAL_ENTRY_RESTRICTED_PTYPES = frozenset({
 	"delete",
 })
 
+PAYMENT_ENTRY_ALLOWED_ROLES = frozenset({
+	"Administrator",
+	"System Manager",
+	"System Admin",
+	"Accountant",
+})
+
+ACCOUNTING_RESTRICTED_PTYPES = JOURNAL_ENTRY_RESTRICTED_PTYPES
+
 
 def _is_privileged(user: str) -> bool:
 	if user == "Administrator":
@@ -134,6 +143,46 @@ def validate_journal_entry_admin(doc, method=None):
 def before_submit_journal_entry_admin(doc, method=None):
 	if not can_manage_journal_entry():
 		_journal_entry_permission_error()
+
+
+def can_manage_payment_entry(user: str | None = None) -> bool:
+	if not user:
+		user = frappe.session.user
+	if user == "Administrator":
+		return True
+	return bool(PAYMENT_ENTRY_ALLOWED_ROLES.intersection(frappe.get_roles(user)))
+
+
+def has_payment_entry_permission(doc, ptype: str | None = None, user: str | None = None, debug=False):
+	if not user:
+		user = frappe.session.user
+
+	if can_manage_payment_entry(user):
+		return True
+
+	if ptype in ACCOUNTING_RESTRICTED_PTYPES:
+		return False
+
+	return True
+
+
+def _payment_entry_permission_error():
+	frappe.throw(
+		_("Only Accountant or System Administrator can create, save, or submit Payment Entries."),
+		frappe.PermissionError,
+	)
+
+
+def validate_payment_entry_accountant(doc, method=None):
+	if frappe.flags.in_install or frappe.flags.in_patch or frappe.flags.in_migrate:
+		return
+	if not can_manage_payment_entry():
+		_payment_entry_permission_error()
+
+
+def before_submit_payment_entry_accountant(doc, method=None):
+	if not can_manage_payment_entry():
+		_payment_entry_permission_error()
 
 
 def validate_sales_invoice_sales_user(doc, method=None):
