@@ -1,5 +1,11 @@
 import frappe
 from frappe import _
+from frappe.utils import cint, flt
+
+
+def sync_sales_invoice_item_running_price(doc, method=None):
+	for row in doc.get("items") or []:
+		row.custom_running_price = flt(row.rate)
 
 
 def sales_invoice_on_submit(doc, method=None):
@@ -9,7 +15,12 @@ def sales_invoice_on_submit(doc, method=None):
 	2. Submit a Material Receipt Stock Entry to record the purchase cost
 	   at the custom_purchase_price rate — this directly impacts COGS
 	   via the Stock Ledger valuation rate.
+
+	Skipped for Sales Return invoices.
 	"""
+	if cint(doc.get("is_return")):
+		return
+
 	items_with_price = [
 		row for row in doc.items
 		if row.get("custom_purchase_price") and row.item_code

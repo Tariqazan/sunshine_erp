@@ -9,19 +9,44 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 	const page_size = 20;
 	let total_count = 0;
 
-	if (!document.getElementById("dl-style")) {
-		$("head").append(`<style id="dl-style">
+	if (!document.getElementById("dl-style-v2")) {
+		$("#dl-style, #dl-style-v2").remove();
+		$("head").append(`<style id="dl-style-v2">
 /* ── wrapper ── */
-.dl-wrap { padding: 10px 0 24px; }
+.dl-wrap {
+	padding: 10px 0 24px;
+	position: relative;
+}
 
-/* ── filter card ── */
+/* ── filter card (above sticky table header & link dropdowns) ── */
 .dl-filter-card {
+	position: relative;
+	z-index: 100;
+	overflow: visible;
 	background: #fff;
 	border: 1px solid #e2e8f0;
 	border-radius: 12px;
 	padding: 16px 18px 12px;
 	box-shadow: 0 1px 4px rgba(0,0,0,.06);
 	margin-bottom: 14px;
+}
+.dl-filter-card .frappe-control {
+	position: relative;
+	z-index: 1;
+	overflow: visible;
+}
+.dl-filter-card .link-field,
+.dl-filter-card .awesomplete {
+	position: relative;
+	z-index: 2;
+	overflow: visible;
+}
+.dl-filter-card .awesomplete > ul {
+	z-index: 200 !important;
+}
+.dl-filter-sales-note {
+	position: relative;
+	z-index: 99;
 }
 .dl-filter-title {
 	font-size: 11px;
@@ -33,10 +58,22 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 }
 .dl-filter-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 .dl-filter-field { flex: 1 1 180px; min-width: 150px; }
-.dl-filter-actions { display: flex; gap: 8px; padding-bottom: 2px; }
+.dl-filter-actions { display: flex; gap: 8px; padding-bottom: 2px; flex-wrap: wrap; }
+.dl-btn-pdf { font-weight: 600; }
+.dl-sales-user-note {
+	font-size: 12px;
+	color: #475569;
+	margin: -4px 0 10px;
+	padding: 8px 10px;
+	background: #f8fafc;
+	border-radius: 8px;
+	border: 1px solid #e2e8f0;
+}
 
 /* ── summary cards ── */
 .dl-summary-row {
+	position: relative;
+	z-index: 90;
 	display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;
 }
 .dl-scard {
@@ -54,6 +91,8 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 
 /* ── table container ── */
 .dl-table-card {
+	position: relative;
+	z-index: 1;
 	background: #fff;
 	border: 1px solid #e2e8f0;
 	border-radius: 12px;
@@ -66,6 +105,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 	overflow-y: auto;
 	max-height: calc(100vh - 230px);
 	min-height: 120px;
+	isolation: isolate;
 }
 /* The actual table */
 .dl-tbl {
@@ -76,8 +116,6 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 }
 .dl-tbl thead th {
 	position: sticky;
-	top: 0;
-	z-index: 10;
 	background: #f1f5f9;
 	color: #374151;
 	font-weight: 700;
@@ -90,8 +128,10 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 	text-align: left;
 }
 .dl-tbl thead th.num { text-align: right; }
-/* group header row */
+/* group header row scrolls away; column headers stay sticky */
 .dl-tbl thead tr.dl-group-row th {
+	position: static;
+	z-index: auto;
 	background: #e2e8f0;
 	font-size: 10px;
 	color: #64748b;
@@ -99,6 +139,10 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 	text-align: center;
 	border-bottom: 1px solid #cbd5e1;
 	letter-spacing: .5px;
+}
+.dl-tbl thead tr:not(.dl-group-row) th {
+	top: 0;
+	z-index: 2;
 }
 
 /* body cells — word wrap, no truncate */
@@ -218,11 +262,16 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 	const $w = $(`<div class="dl-wrap">
 		<div class="dl-filter-card">
 			<div class="dl-filter-title">Dealer Ledger — Filters</div>
+			<div class="dl-filter-sales-note" style="display:none;"></div>
 			<div class="dl-filter-row">
+				<div class="dl-filter-field dl-f-sales-user" style="display:none;"></div>
 				<div class="dl-filter-field dl-f-customer"></div>
 				<div class="dl-filter-field dl-f-from"></div>
 				<div class="dl-filter-field dl-f-to"></div>
 				<div class="dl-filter-actions">
+					<button class="btn btn-primary btn-sm dl-btn-pdf" title="Download filtered ledger as PDF">
+						<i class="fa fa-file-pdf-o"></i> Download PDF
+					</button>
 					<button class="btn btn-default btn-sm dl-btn-reset">Reset Filters</button>
 				</div>
 			</div>
@@ -257,6 +306,25 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 			load_report();
 		}, 300);
 	};
+
+	let page_context = {
+		can_filter_sales_user: false,
+		is_salesman: false,
+		current_user: frappe.session.user,
+	};
+
+	const f_sales_user = frappe.ui.form.make_control({
+		parent: $w.find(".dl-f-sales-user"),
+		df: {
+			fieldname: "sales_user",
+			label: "Sales User",
+			fieldtype: "Link",
+			options: "User",
+			placeholder: "All Sales Users",
+			onchange: trigger_reload,
+		},
+		render_input: true,
+	});
 
 	const f_customer = frappe.ui.form.make_control({
 		parent: $w.find(".dl-f-customer"),
@@ -309,7 +377,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 			{ lbl: "Total Deposit",  val: fmt_cur(T.dep) },
 			{ lbl: "Bank Charge",    val: fmt_cur(T.charge) },
 			{ lbl: "Net Deposit",    val: fmt_cur(T.net) },
-			{ lbl: "Balance TK",     val: fmt_cur(T.bal), accent: true },
+			{ lbl: "Balance TK",     val: fmt_cur(T.bal) },
 		];
 
 		$w.find(".dl-summary-row").html(
@@ -336,7 +404,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 
 		const body_rows = rows.map(r => {
 			const hasDetails = (r.items.length > 0 || r.payments.length > 0);
-			const expandIcon = hasDetails ? `<i class="fa fa-chevron-right dl-expand-icon" style="transition: transform 0.2s; color:#64748b; font-size:10px;"></i>` : "";
+			const expandIcon = hasDetails ? `<i class="fa fa-chevron-right dl-expand-icon" style="transition: transform 0.2s; font-size:10px;"></i>` : "";
 			
 			const items_html = r.items.length ? `
 				<div class="nested-table-wrapper">
@@ -348,29 +416,20 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 							<tr>
 								<th class="text-left">Item Name</th>
 								<th class="num">Qty</th>
-								<th class="num">Purchase Price</th>
-								<th class="num">Total Purchase</th>
 								<th class="num">Reg. Price</th>
 								<th class="num">Run. Price</th>
 								<th class="num">Amount</th>
 								<th class="num">Comm.</th>
 							</tr>
-							${(() => {
-								return r.items.map(i => {
-									const tp = i.purchase_price ? (i.qty * i.purchase_price) : 0;
-									return `
-										<tr>
-											<td class="text-left">${esc(i.item_name)}</td>
-											<td class="num">${esc(i.qty)}</td>
-											<td class="num" style="color:#6b7280;">${i.purchase_price ? esc(fmt_cur(i.purchase_price)) : '<span style="color:#d1d5db;">—</span>'}</td>
-											<td class="num" style="color:#7c3aed; font-weight:600;">${tp ? esc(fmt_cur(tp)) : '<span style="color:#d1d5db;">—</span>'}</td>
-											<td class="num">${esc(fmt_cur(i.regular_price))}</td>
-											<td class="num">${esc(fmt_cur(i.running_price))}</td>
-											<td class="num" style="font-weight:600; color:#1f2937;">${esc(fmt_cur(i.amount))}</td>
-											<td class="num">${esc(fmt_cur(i.commission_amount))}</td>
-										</tr>`;
-								}).join("");
-							})()}
+							${r.items.map(i => `
+								<tr>
+									<td class="text-left">${esc(i.item_name)}</td>
+									<td class="num">${esc(i.qty)}</td>
+									<td class="num">${esc(fmt_cur(i.regular_price))}</td>
+									<td class="num">${esc(fmt_cur(i.running_price))}</td>
+									<td class="num">${esc(fmt_cur(i.amount))}</td>
+									<td class="num">${esc(fmt_cur(i.commission_amount))}</td>
+								</tr>`).join("")}
 						</table>
 					</div>
 				</div>
@@ -397,8 +456,8 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 								<td class="text-left">${esc(p.bank_name)}</td>
 								<td class="text-left">${esc(p.deposit_account_name)}</td>
 								<td class="num">${esc(fmt_cur(p.deposit_amount))}</td>
-								<td class="num" style="color:#ef4444;">${esc(fmt_cur(p.bank_charge))}</td>
-								<td class="num" style="font-weight:600; color:#10b981;">${esc(fmt_cur(p.net_deposit))}</td>
+								<td class="num">${esc(fmt_cur(p.bank_charge))}</td>
+								<td class="num">${esc(fmt_cur(p.net_deposit))}</td>
 							</tr>`).join("")}
 						</table>
 					</div>
@@ -409,7 +468,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 			<tr class="parent-row" data-id="${esc(r.invoice_name)}">
 				<td class="col-sl" style="white-space:nowrap;">
 					<div style="display:flex; align-items:center; gap:8px;">
-						${expandIcon} <span style="font-weight:600; color:#475569;">${r.entry_sl}</span>
+						${expandIcon} <span style="font-weight:600;">${r.entry_sl}</span>
 					</div>
 				</td>
 				<td style="white-space:nowrap;">${esc(r.date ? frappe.datetime.str_to_user(r.date) : "")}</td>
@@ -420,24 +479,23 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 				<td class="num">${esc(r.total_qty || 0)}</td>
 				<td class="num"></td>
 				<td class="num"></td>
-				<td class="num" style="font-weight:700; color:#1f2937;">${esc(fmt_cur(r.total_selling_price))}</td>
-				<td class="num" style="font-weight:600; color:#7c3aed;">${r.total_purchase_price ? esc(fmt_cur(r.total_purchase_price)) : '<span style="color:#d1d5db;">—</span>'}</td>
+				<td class="num">${esc(fmt_cur(r.total_selling_price))}</td>
 				<td class="num">${esc(fmt_cur(r.total_commission))}</td>
 				
 				<td>${esc(r.deposit_slip_no)}</td>
 				<td>${esc(r.bank_name)}</td>
 				<td>${esc(r.deposit_account_name)}</td>
-				<td class="num" style="font-weight:600; color:#2563eb;">${esc(fmt_cur(r.deposit_amount))}</td>
-				<td class="num" style="color:#ef4444;">${esc(fmt_cur(r.bank_charge))}</td>
-				<td class="num" style="font-weight:600; color:#10b981;">${esc(fmt_cur(r.net_deposit))}</td>
+				<td class="num">${esc(fmt_cur(r.deposit_amount))}</td>
+				<td class="num">${esc(fmt_cur(r.bank_charge))}</td>
+				<td class="num">${esc(fmt_cur(r.net_deposit))}</td>
 				
-				<td class="num" style="font-weight:700; color:#0f172a;">${esc(fmt_cur(r.balance_tk))}</td>
+				<td class="num">${esc(fmt_cur(r.balance_tk))}</td>
 				
 				<td>${esc(r.showroom_name)}</td>
 				<td>${esc(r.owner_name)}</td>
 			</tr>
 			<tr class="child-row" id="child-${esc(r.invoice_name)}" style="display: none;">
-				<td colspan="20">
+				<td colspan="19">
 					<div class="child-container">
 						<div class="dl-child-grid">
 							${items_html}
@@ -453,11 +511,11 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 		<table class="dl-tbl">
 			<thead>
 				<tr class="dl-group-row">
-					<th colspan="4" style="background:#f8fafc;">Common</th>
-					<th colspan="7" style="background:#f0fdf4; color:#166534;">Sales Totals</th>
-					<th colspan="6" style="background:#eff6ff; color:#1e40af;">Deposit Totals</th>
-					<th colspan="1" style="background:#f8fafc;">Balance</th>
-					<th colspan="2" style="background:#f8fafc;">Dealer Info</th>
+					<th colspan="4">Common</th>
+					<th colspan="6">Sales Totals</th>
+					<th colspan="6">Deposit Totals</th>
+					<th colspan="1">Balance</th>
+					<th colspan="2">Dealer Info</th>
 				</tr>
 				<tr>
 					<th class="col-sl">Sl#</th>
@@ -470,7 +528,6 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 					<th class="num">Regular Price</th>
 					<th class="num">Running Price</th>
 					<th class="num">Total Selling Price</th>
-					<th class="num" style="color:#7c3aed;">Total Purchase</th>
 					<th class="num">Commission Tk/Pcs</th>
 					
 					<th>Deposit Slip No / Txn ID</th>
@@ -516,6 +573,67 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 		$w.find(".dl-btn-next").prop("disabled", end_idx >= total_count);
 	}
 
+	function get_sales_user_filter_value() {
+		if (page_context.can_filter_sales_user) {
+			return f_sales_user.get_value() || null;
+		}
+		return null;
+	}
+
+	function get_filter_args() {
+		return {
+			customer: f_customer.get_value() || "",
+			from_date: f_from.get_value() || "",
+			to_date: f_to.get_value() || "",
+			sales_user: get_sales_user_filter_value() || "",
+		};
+	}
+
+	function download_dealer_ledger_pdf() {
+		if (!total_count) {
+			frappe.msgprint({
+				title: __("No Data"),
+				message: __("Apply filters with at least one invoice before downloading PDF."),
+				indicator: "orange",
+			});
+			return;
+		}
+
+		const args = get_filter_args();
+		const query = Object.keys(args)
+			.filter((key) => args[key])
+			.map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(args[key])}`)
+			.join("&");
+
+		const url =
+			frappe.urllib.get_full_url(
+				"/api/method/sunshine_power_ltd.sunshine_power_ltd.page.dealer_ledger.dealer_ledger.download_dealer_ledger_pdf"
+			) + (query ? `?${query}` : "");
+
+		window.open(url, "_blank");
+	}
+
+	async function setup_page_context() {
+		try {
+			const res = await frappe.call({
+				method: "sunshine_power_ltd.sunshine_power_ltd.page.dealer_ledger.dealer_ledger.get_dealer_ledger_context",
+			});
+			page_context = res.message || page_context;
+
+			if (page_context.can_filter_sales_user) {
+				$w.find(".dl-f-sales-user").show();
+			} else if (page_context.is_salesman) {
+				$w.find(".dl-filter-sales-note")
+					.show()
+					.html(
+						`<div class="dl-sales-user-note"><i class="fa fa-user"></i> Showing ledger for: <strong>${esc(page_context.current_user)}</strong></div>`
+					);
+			}
+		} catch (err) {
+			console.error(err);
+		}
+	}
+
 	async function load_report() {
 		$w.find(".dl-table-scroll").html(`<div class="dl-empty"><i class="fa fa-spinner fa-spin"></i><p>Loading...</p></div>`);
 		
@@ -523,11 +641,12 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 			const res = await frappe.call({
 				method: "sunshine_power_ltd.sunshine_power_ltd.page.dealer_ledger.dealer_ledger.get_dealer_ledger",
 				args: {
-					customer:  f_customer.get_value() || null,
-					from_date: f_from.get_value()     || null,
-					to_date:   f_to.get_value()       || null,
-					start:     (current_page - 1) * page_size,
-					limit:     page_size
+					customer: f_customer.get_value() || null,
+					from_date: f_from.get_value() || null,
+					to_date: f_to.get_value() || null,
+					sales_user: get_sales_user_filter_value(),
+					start: (current_page - 1) * page_size,
+					limit: page_size,
 				},
 			});
 			const result = res.message || { data: [], total_count: 0 };
@@ -556,12 +675,21 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 		}
 	});
 
+	$w.find(".dl-btn-pdf").on("click", () => download_dealer_ledger_pdf());
+
+	page.set_secondary_action(__("Download PDF"), () => download_dealer_ledger_pdf(), "file-pdf");
+
 	$w.find(".dl-btn-reset").on("click", () => {
+		if (page_context.can_filter_sales_user) {
+			f_sales_user.set_value("");
+		}
 		f_customer.set_value("");
 		f_from.set_value("");
 		f_to.set_value("");
 	});
 
-	// Initial load without needing a click
-	load_report();
+	(async () => {
+		await setup_page_context();
+		load_report();
+	})();
 };

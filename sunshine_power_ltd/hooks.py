@@ -20,7 +20,9 @@ app_license = "mit"
 # 		"has_permission": "sunshine_power_ltd.api.permission.has_app_permission"
 # 	}
 # ]
-
+fixtures = [
+    "Role", "Custom DocPerm"
+]
 # Includes in <head>
 # ------------------
 
@@ -43,7 +45,7 @@ app_license = "mit"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
+doctype_js = {"Sales Invoice": "public/js/sales_invoice.js"}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
@@ -120,13 +122,13 @@ app_license = "mit"
 # -----------
 # Permissions evaluated in scripted ways
 
-# permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
-# }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
+permission_query_conditions = {
+	"Sales Invoice": "sunshine_power_ltd.permissions.get_sales_invoice_permission_query_conditions",
+}
+
+has_permission = {
+	"Sales Invoice": "sunshine_power_ltd.permissions.has_sales_invoice_permission",
+}
 
 # Document Events
 # ---------------
@@ -134,8 +136,13 @@ app_license = "mit"
 
 doc_events = {
 	"Sales Invoice": {
-        "on_submit": "sunshine_power_ltd.overrides.sales_invoice_on_submit"
-    }
+		"validate": [
+			"sunshine_power_ltd.permissions.validate_sales_invoice_sales_user",
+			"sunshine_power_ltd.overrides.sync_sales_invoice_item_running_price",
+		],
+		"before_submit": "sunshine_power_ltd.permissions.before_submit_sales_invoice",
+		"on_submit": "sunshine_power_ltd.overrides.sales_invoice_on_submit",
+	}
 }
 
 # Scheduled Tasks
