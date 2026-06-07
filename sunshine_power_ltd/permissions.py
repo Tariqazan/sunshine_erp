@@ -21,11 +21,20 @@ JOURNAL_ENTRY_RESTRICTED_PTYPES = frozenset({
 	"delete",
 })
 
-PAYMENT_ENTRY_ALLOWED_ROLES = frozenset({
-	"Administrator",
-	"System Manager",
+PAYMENT_ENTRY_SUBMIT_ROLES = frozenset({
 	"System Admin",
-	"Accountant",
+	"Accounts",
+})
+
+# Salesman (salesperson): create/save drafts only — no submit/cancel/amend.
+PAYMENT_ENTRY_DRAFT_ROLES = frozenset({
+	"Salesman",
+})
+
+PAYMENT_ENTRY_DRAFT_DENIED_PTYPES = frozenset({
+	"submit",
+	"cancel",
+	"amend",
 })
 
 ACCOUNTING_RESTRICTED_PTYPES = JOURNAL_ENTRY_RESTRICTED_PTYPES
@@ -145,12 +154,24 @@ def before_submit_journal_entry_admin(doc, method=None):
 		_journal_entry_permission_error()
 
 
-def can_manage_payment_entry(user: str | None = None) -> bool:
+def can_submit_payment_entry(user: str | None = None) -> bool:
 	if not user:
 		user = frappe.session.user
 	if user == "Administrator":
 		return True
-	return bool(PAYMENT_ENTRY_ALLOWED_ROLES.intersection(frappe.get_roles(user)))
+	return bool(PAYMENT_ENTRY_SUBMIT_ROLES.intersection(frappe.get_roles(user)))
+
+
+def can_manage_payment_entry(user: str | None = None) -> bool:
+	return can_submit_payment_entry(user)
+
+
+def is_payment_entry_draft_only_user(user: str | None = None) -> bool:
+	if not user:
+		user = frappe.session.user
+	if can_manage_payment_entry(user):
+		return False
+	return bool(PAYMENT_ENTRY_DRAFT_ROLES.intersection(frappe.get_roles(user)))
 
 
 def has_payment_entry_permission(doc, ptype: str | None = None, user: str | None = None, debug=False):
@@ -158,6 +179,19 @@ def has_payment_entry_permission(doc, ptype: str | None = None, user: str | None
 		user = frappe.session.user
 
 	if can_manage_payment_entry(user):
+		return True
+
+	if is_payment_entry_draft_only_user(user):
+		if ptype == "submit" or ptype in PAYMENT_ENTRY_DRAFT_DENIED_PTYPES:
+			return False
+		if ptype == "delete":
+			if doc and doc.docstatus == 0 and (doc.get("owner") or user) == user:
+				return True
+			return False
+		if ptype in ("create", "write"):
+			if doc and doc.docstatus != 0:
+				return False
+			return True
 		return True
 
 	if ptype in ACCOUNTING_RESTRICTED_PTYPES:
@@ -168,7 +202,14 @@ def has_payment_entry_permission(doc, ptype: str | None = None, user: str | None
 
 def _payment_entry_permission_error():
 	frappe.throw(
-		_("Only Accountant or System Administrator can create, save, or submit Payment Entries."),
+		_("Only Accounts or System Admin can create, save, or submit Payment Entries."),
+		frappe.PermissionError,
+	)
+
+
+def _payment_entry_draft_only_error():
+	frappe.throw(
+		_("Sales users can only save Payment Entries as draft. Accounts or System Admin must submit."),
 		frappe.PermissionError,
 	)
 
@@ -176,12 +217,19 @@ def _payment_entry_permission_error():
 def validate_payment_entry_accountant(doc, method=None):
 	if frappe.flags.in_install or frappe.flags.in_patch or frappe.flags.in_migrate:
 		return
-	if not can_manage_payment_entry():
-		_payment_entry_permission_error()
+	if can_manage_payment_entry():
+		return
+	if is_payment_entry_draft_only_user() and doc.docstatus == 0:
+		return
+	if is_payment_entry_draft_only_user():
+		_payment_entry_draft_only_error()
+	_payment_entry_permission_error()
 
 
 def before_submit_payment_entry_accountant(doc, method=None):
-	if not can_manage_payment_entry():
+	if not can_submit_payment_entry():
+		if is_payment_entry_draft_only_user():
+			_payment_entry_draft_only_error()
 		_payment_entry_permission_error()
 
 
