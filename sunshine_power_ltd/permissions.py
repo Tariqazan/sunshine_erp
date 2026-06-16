@@ -14,7 +14,6 @@ SALES_INVOICE_SUBMIT_ROLES = frozenset({
 	"System Manager",
 	"System Admin",
 	"Accounts",
-	"Head Office",
 })
 
 JOURNAL_ENTRY_ADMIN_ROLES = frozenset({
@@ -124,7 +123,7 @@ def before_submit_sales_invoice(doc, method=None):
 	if not can_submit_sales_invoice():
 		frappe.throw(
 			_(
-				"Only System Manager, System Admin, Accounts, Head Office, or Administrator can submit Sales Invoices."
+				"Only System Manager, System Admin, Accounts, or Administrator can submit Sales Invoices."
 			),
 			frappe.PermissionError,
 		)
