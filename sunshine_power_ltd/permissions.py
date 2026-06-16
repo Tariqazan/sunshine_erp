@@ -4,6 +4,17 @@ from frappe import _
 SALES_INVOICE_PRIVILEGED_ROLES = frozenset({
 	"Administrator",
 	"System Manager",
+	"System Admin",
+	"Accounts",
+	"Head Office",
+})
+
+SALES_INVOICE_SUBMIT_ROLES = frozenset({
+	"Administrator",
+	"System Manager",
+	"System Admin",
+	"Accounts",
+	"Head Office",
 })
 
 JOURNAL_ENTRY_ADMIN_ROLES = frozenset({
@@ -24,6 +35,7 @@ JOURNAL_ENTRY_RESTRICTED_PTYPES = frozenset({
 PAYMENT_ENTRY_SUBMIT_ROLES = frozenset({
 	"System Admin",
 	"Accounts",
+	"Head Office",
 })
 
 # Salesman (salesperson): create/save drafts only — no submit/cancel/amend.
@@ -49,7 +61,9 @@ def _is_privileged(user: str) -> bool:
 def can_submit_sales_invoice(user: str | None = None) -> bool:
 	if not user:
 		user = frappe.session.user
-	return user == "Administrator" or "System Manager" in frappe.get_roles(user)
+	if user == "Administrator":
+		return True
+	return bool(SALES_INVOICE_SUBMIT_ROLES.intersection(frappe.get_roles(user)))
 
 
 def is_sales_invoice_restricted(user: str | None = None) -> bool:
@@ -109,7 +123,9 @@ def has_sales_invoice_permission(doc, ptype: str | None = None, user: str | None
 def before_submit_sales_invoice(doc, method=None):
 	if not can_submit_sales_invoice():
 		frappe.throw(
-			_("Only System Manager and Administrator can submit Sales Invoices."),
+			_(
+				"Only System Manager, System Admin, Accounts, Head Office, or Administrator can submit Sales Invoices."
+			),
 			frappe.PermissionError,
 		)
 

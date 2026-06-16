@@ -482,8 +482,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 				<td class="num">${esc(fmt_cur(r.total_selling_price))}</td>
 				<td class="num">${esc(fmt_cur(r.total_commission))}</td>
 				
-				<td>${esc(r.deposit_slip_no)}</td>
-				<td>${esc(r.bank_name)}</td>
+			<td>${esc(r.bank_name)}</td>
 				<td>${esc(r.deposit_account_name)}</td>
 				<td class="num">${esc(fmt_cur(r.deposit_amount))}</td>
 				<td class="num">${esc(fmt_cur(r.bank_charge))}</td>
@@ -495,7 +494,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 				<td>${esc(r.owner_name)}</td>
 			</tr>
 			<tr class="child-row" id="child-${esc(r.invoice_name)}" style="display: none;">
-				<td colspan="19">
+				<td colspan="18">
 					<div class="child-container">
 						<div class="dl-child-grid">
 							${items_html}
@@ -513,7 +512,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 				<tr class="dl-group-row">
 					<th colspan="4">Common</th>
 					<th colspan="6">Sales Totals</th>
-					<th colspan="6">Deposit Totals</th>
+					<th colspan="5">Deposit Totals</th>
 					<th colspan="1">Balance</th>
 					<th colspan="2">Dealer Info</th>
 				</tr>
@@ -530,8 +529,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 					<th class="num">Total Selling Price</th>
 					<th class="num">Commission Tk/Pcs</th>
 					
-					<th>Deposit Slip No / Txn ID</th>
-					<th>Bank Name</th>
+				<th>Bank Name</th>
 					<th>Deposit Account Name</th>
 					<th class="num">Deposit Amount</th>
 					<th class="num">Bank Charge</th>
