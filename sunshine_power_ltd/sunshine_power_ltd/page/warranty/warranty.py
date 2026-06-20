@@ -325,6 +325,7 @@ def load_sales_invoice(sales_invoice):
 				"has_serial_no": cint(item_meta.get("has_serial_no")),
 				"has_batch_no": cint(item_meta.get("has_batch_no")),
 				"fully_claimed": remaining_qty <= 0,
+				"pending_settle_qty": registered_qty if registered_qty > 0 else max(claimed_qty - replaced_qty, 0),
 				"rate": _flt(row.rate),
 				"uom": row.uom,
 				"warehouse": row.warehouse,
@@ -332,6 +333,13 @@ def load_sales_invoice(sales_invoice):
 		)
 
 	summary = _build_summary(sales_invoice, si.customer, items, history, transfer_count)
+	has_draft = bool(draft_returns)
+	claimed_qty = _flt(summary.get("claimed_qty"))
+	settle_mode = "none"
+	if has_draft:
+		settle_mode = "full"
+	elif claimed_qty > _flt(summary.get("replaced_qty")):
+		settle_mode = "replacement_only"
 
 	return {
 		"sales_invoice": si.name,
@@ -344,8 +352,9 @@ def load_sales_invoice(sales_invoice):
 		"summary": summary,
 		"history": history,
 		"draft_returns": draft_returns,
-		"has_draft_return": bool(draft_returns),
+		"has_draft_return": has_draft,
 		"pending_return_invoice": draft_returns[0]["name"] if draft_returns else "",
+		"settle_mode": settle_mode,
 	}
 
 
@@ -743,6 +752,102 @@ def create_warranty_return(sales_invoice, items, receive_warehouse=None, product
 	}
 
 
+def _submit_warranty_return_doc(return_doc, receive_warehouse, product_condition):
+	if product_condition not in PRODUCT_CONDITIONS:
+		frappe.throw(_("Select a valid product condition."))
+
+	if _has_warranty_field("Sales Invoice", "custom_is_warranty_claim"):
+		if not cint(return_doc.custom_is_warranty_claim):
+			frappe.throw(_("This is not a warranty return invoice."))
+
+	if _has_warranty_field("Sales Invoice", "custom_warranty_product_condition"):
+		return_doc.custom_warranty_product_condition = product_condition
+
+	return_doc.update_stock = 1
+	for item in return_doc.items:
+		item.warehouse = receive_warehouse
+
+	return_doc.save()
+	return_doc.submit()
+	return return_doc
+
+
+def _build_transfer_items_from_return(return_doc):
+	items = []
+	for row in return_doc.items:
+		qty = abs(_flt(row.qty))
+		if qty <= 0:
+			continue
+		items.append({
+			"sales_invoice_item": row.sales_invoice_item,
+			"item_code": row.item_code,
+			"uom": row.uom,
+			"transfer_qty": qty,
+			"serial_no": row.serial_no or "",
+			"batch_no": row.batch_no or "",
+		})
+	return items
+
+
+@frappe.whitelist()
+def settle_warranty_claim(
+	sales_invoice,
+	return_invoice=None,
+	receive_warehouse=None,
+	product_condition=None,
+	replacement_warehouse=None,
+	items=None,
+):
+	"""One step: submit return (if draft), transfer to condition warehouse, issue replacement."""
+	frappe.has_permission("Sales Invoice", "read", throw=True)
+
+	items = _parse_json(items)
+	replacement_items = [row for row in items if _flt(row.get("replacement_qty")) > 0]
+	if not replacement_items:
+		frappe.throw(_("Enter replacement quantity for at least one item."))
+	if not replacement_warehouse:
+		frappe.throw(_("Replacement Warehouse is mandatory."))
+
+	invoice_data = load_sales_invoice(sales_invoice)
+	if not return_invoice:
+		return_invoice = invoice_data.get("pending_return_invoice")
+
+	has_draft = invoice_data.get("has_draft_return")
+
+	if has_draft:
+		if not return_invoice:
+			frappe.throw(_("No pending return found for this invoice."))
+		if not receive_warehouse:
+			frappe.throw(_("Receive Warehouse is mandatory."))
+		frappe.has_permission("Sales Invoice", "submit", throw=True)
+
+		return_doc = frappe.get_doc("Sales Invoice", return_invoice)
+		if return_doc.docstatus != 0:
+			frappe.throw(_("Return invoice is already submitted."))
+
+		_submit_warranty_return_doc(return_doc, receive_warehouse, product_condition)
+		target_warehouse = get_warranty_context()["condition_warehouses"].get(product_condition)
+
+		transfer_items = _build_transfer_items_from_return(return_doc)
+		if transfer_items and target_warehouse and receive_warehouse != target_warehouse:
+			create_warranty_stock_transfer(
+				sales_invoice,
+				transfer_items,
+				receive_warehouse,
+				target_warehouse,
+				submit=1,
+			)
+	elif _flt(invoice_data["summary"].get("claimed_qty")) <= 0:
+		frappe.throw(_("No claim found for this invoice."))
+
+	return create_warranty_replacement(
+		sales_invoice,
+		replacement_items,
+		replacement_warehouse,
+		submit=1,
+	)
+
+
 @frappe.whitelist()
 def submit_warranty_return(return_invoice, receive_warehouse=None, product_condition=None):
 	"""Settle team receives product — set warehouse, condition, and submit return."""
@@ -766,15 +871,7 @@ def submit_warranty_return(return_invoice, receive_warehouse=None, product_condi
 		if not cint(return_doc.custom_is_warranty_claim):
 			frappe.throw(_("This is not a warranty return invoice."))
 
-	if _has_warranty_field("Sales Invoice", "custom_warranty_product_condition"):
-		return_doc.custom_warranty_product_condition = product_condition
-
-	return_doc.update_stock = 1
-	for item in return_doc.items:
-		item.warehouse = receive_warehouse
-
-	return_doc.save()
-	return_doc.submit()
+	_submit_warranty_return_doc(return_doc, receive_warehouse, product_condition)
 
 	sales_invoice = return_doc.return_against
 	return {
