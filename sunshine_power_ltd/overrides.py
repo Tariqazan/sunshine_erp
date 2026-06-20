@@ -5,7 +5,11 @@ from frappe.utils import cint, flt
 
 def sync_sales_invoice_item_running_price(doc, method=None):
 	for row in doc.get("items") or []:
-		row.custom_running_price = flt(row.rate)
+		if flt(row.custom_running_price):
+			continue
+		rate = flt(row.rate)
+		if rate:
+			row.custom_running_price = rate
 
 
 def sales_invoice_on_submit(doc, method=None):
