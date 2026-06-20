@@ -11,6 +11,7 @@ def _flt(value):
 def get_dealer_ledger(customer=None, from_date=None, to_date=None, start=0, limit=20):
     start = frappe.utils.cint(start)
     limit = frappe.utils.cint(limit)
+    can_view_purchase_price = "System Manager" in frappe.get_roles()
 
     conditions = ["docstatus = 1"]
     values = []
@@ -159,7 +160,6 @@ def get_dealer_ledger(customer=None, from_date=None, to_date=None, start=0, limi
             
             "total_qty": total_qty,
             "total_selling_price": total_selling_price,
-            "total_purchase_price": total_purchase_price,
             "total_commission": total_commission,
             
             "deposit_slip_no": ", ".join(deposit_slips),
@@ -167,26 +167,30 @@ def get_dealer_ledger(customer=None, from_date=None, to_date=None, start=0, limi
             "deposit_account_name": ", ".join(deposit_accounts),
             "deposit_amount": total_deposit,
             "bank_charge": total_charge,
-            "net_deposit": total_net_deposit,
             "balance_tk": balance_tk,
             
             "items": [],
             "payments": inv_payments
         }
+
+        if can_view_purchase_price:
+            row["total_purchase_price"] = total_purchase_price
         
         for i in inv_items:
             regular_price = _flt(i.rate)
             running_price = _flt(i.custom_running_price) or regular_price
-            row["items"].append({
+            item_row = {
                 "item_code": i.item_code,
                 "item_name": i.item_name or i.item_code,
                 "qty": _flt(i.qty),
                 "regular_price": regular_price,
                 "running_price": running_price,
-                "purchase_price": _flt(i.custom_purchase_price),
                 "amount": _flt(i.amount),
                 "commission_amount": _flt(i.custom_commission_amount)
-            })
+            }
+            if can_view_purchase_price:
+                item_row["purchase_price"] = _flt(i.custom_purchase_price)
+            row["items"].append(item_row)
             
         rows.append(row)
         serial += 1
