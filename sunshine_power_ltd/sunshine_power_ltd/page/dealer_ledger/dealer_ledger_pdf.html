@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<style>
+		@page {
+			size: A4;
+			margin: 14mm 12mm 16mm;
+		}
+		* { box-sizing: border-box; }
+		body {
+			font-family: Helvetica, Arial, sans-serif;
+			font-size: 10px;
+			line-height: 1.45;
+			color: #000;
+			margin: 0;
+		}
+		.report-header {
+			margin-bottom: 16px;
+			padding-bottom: 10px;
+			border-bottom: 2px solid #000;
+		}
+		.report-header h1 {
+			margin: 0 0 6px;
+			font-size: 22px;
+			font-weight: 700;
+		}
+		.report-header .meta-line {
+			font-size: 10px;
+			margin: 2px 0;
+		}
+		.section-title {
+			font-size: 11px;
+			font-weight: 700;
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			margin: 18px 0 8px;
+			padding-bottom: 4px;
+			border-bottom: 1px solid #000;
+		}
+		.filter-box {
+			border: 1px solid #000;
+			padding: 10px 12px;
+			margin-bottom: 14px;
+		}
+		.filter-box p {
+			margin: 4px 0;
+			font-size: 10px;
+		}
+		.filter-box strong {
+			display: inline-block;
+			min-width: 110px;
+		}
+		table.totals-table {
+			width: 100%;
+			border-collapse: collapse;
+			margin-bottom: 20px;
+			font-size: 10px;
+		}
+		table.totals-table th,
+		table.totals-table td {
+			border: 1px solid #000;
+			padding: 8px 10px;
+			text-align: left;
+		}
+		table.totals-table th {
+			font-weight: 700;
+			width: 18%;
+			background: #f5f5f5;
+		}
+		table.totals-table td.num {
+			text-align: right;
+			font-weight: 700;
+		}
+		.invoice-card {
+			border: 1px solid #000;
+			margin-bottom: 16px;
+			page-break-inside: avoid;
+		}
+		.invoice-head {
+			background: #f5f5f5;
+			border-bottom: 1px solid #000;
+			padding: 10px 12px;
+		}
+		.invoice-head .title-row {
+			font-size: 12px;
+			font-weight: 700;
+			margin-bottom: 6px;
+		}
+		.invoice-head .info-grid {
+			display: table;
+			width: 100%;
+		}
+		.invoice-head .info-row {
+			display: table-row;
+		}
+		.invoice-head .info-label,
+		.invoice-head .info-value {
+			display: table-cell;
+			padding: 3px 8px 3px 0;
+			vertical-align: top;
+			font-size: 10px;
+		}
+		.invoice-head .info-label {
+			width: 28%;
+			font-weight: 600;
+		}
+		.invoice-body {
+			padding: 10px 12px 12px;
+		}
+		.amounts-grid {
+			display: table;
+			width: 100%;
+			margin-bottom: 10px;
+		}
+		.amounts-col {
+			display: table-cell;
+			width: 50%;
+			vertical-align: top;
+			padding-right: 12px;
+		}
+		.amounts-col:last-child {
+			padding-right: 0;
+			padding-left: 12px;
+			border-left: 1px solid #ccc;
+		}
+		.amounts-col h4 {
+			margin: 0 0 8px;
+			font-size: 10px;
+			text-transform: uppercase;
+			font-weight: 700;
+		}
+		.amount-line {
+			display: table;
+			width: 100%;
+			margin-bottom: 5px;
+			font-size: 10px;
+		}
+		.amount-line span {
+			display: table-cell;
+		}
+		.amount-line .lbl { width: 55%; }
+		.amount-line .val {
+			text-align: right;
+			font-weight: 600;
+		}
+		.sub-table-title {
+			font-size: 9px;
+			font-weight: 700;
+			text-transform: uppercase;
+			margin: 12px 0 6px;
+		}
+		table.sub-table {
+			width: 100%;
+			border-collapse: collapse;
+			font-size: 9px;
+			margin-bottom: 8px;
+		}
+		table.sub-table th,
+		table.sub-table td {
+			border: 1px solid #ccc;
+			padding: 6px 8px;
+		}
+		table.sub-table th {
+			border: 1px solid #000;
+			font-weight: 700;
+			background: #fafafa;
+		}
+		table.sub-table td.num,
+		table.sub-table th.num {
+			text-align: right;
+		}
+		.empty-msg {
+			text-align: center;
+			padding: 40px 20px;
+			border: 1px dashed #999;
+			font-size: 11px;
+		}
+		.footer {
+			margin-top: 20px;
+			padding-top: 10px;
+			border-top: 1px solid #000;
+			font-size: 9px;
+			text-align: center;
+		}
+	</style>
+</head>
+<body>
+	<div class="report-header">
+		<h1>{{ title }}</h1>
+		<p class="meta-line"><strong>Company:</strong> {{ company }}</p>
+		<p class="meta-line"><strong>Generated:</strong> {{ generated_on }}</p>
+		<p class="meta-line"><strong>Prepared by:</strong> {{ generated_by }}</p>
+	</div>
+
+	<div class="section-title">Report Filters</div>
+	<div class="filter-box">
+		<p><strong>Dealer / Customer:</strong> {{ filters.customer_label }}</p>
+		<p><strong>Sales User:</strong> {{ filters.sales_user_label }}</p>
+		<p><strong>Date Range:</strong> {{ filters.from_date_label }} — {{ filters.to_date_label }}</p>
+	</div>
+
+	<div class="section-title">Grand Totals</div>
+	<table class="totals-table">
+		<tr>
+			<th>Total Sales</th>
+			<td class="num">{{ totals.sales }}</td>
+			<th>Total Commission</th>
+			<td class="num">{{ totals.commission }}</td>
+			<th>Total Deposit</th>
+			<td class="num">{{ totals.deposit }}</td>
+		</tr>
+		<tr>
+			<th>Bank Charge</th>
+			<td class="num">{{ totals.charge }}</td>
+			<th>Net Deposit</th>
+			<td class="num">{{ totals.net_deposit }}</td>
+			<th>Outstanding Balance</th>
+			<td class="num">{{ totals.balance }}</td>
+		</tr>
+	</table>
+
+	<div class="section-title">Invoice Details ({{ rows|length }} record{% if rows|length != 1 %}s{% endif %})</div>
+
+	{% if rows %}
+		{% for row in rows %}
+		<div class="invoice-card">
+			<div class="invoice-head">
+				<div class="title-row">
+					#{{ row.entry_sl }} — {{ row.invoice_name }} &nbsp;&nbsp;|&nbsp;&nbsp; Date: {{ row.date_display }}
+				</div>
+				<div class="info-grid">
+					<div class="info-row">
+						<span class="info-label">Customer</span>
+						<span class="info-value">{{ row.customer }}</span>
+					</div>
+					{% if row.sales_user %}
+					<div class="info-row">
+						<span class="info-label">Sales User</span>
+						<span class="info-value">{{ row.sales_user }}</span>
+					</div>
+					{% endif %}
+					<div class="info-row">
+						<span class="info-label">Transport</span>
+						<span class="info-value">{{ row.transport_name or "—" }}</span>
+					</div>
+					<div class="info-row">
+						<span class="info-label">Booking / Deposit Slip</span>
+						<span class="info-value">{{ row.booking_deposit_slip_no or "—" }}</span>
+					</div>
+					<div class="info-row">
+						<span class="info-label">Showroom</span>
+						<span class="info-value">{{ row.showroom_name or "—" }}</span>
+					</div>
+					<div class="info-row">
+						<span class="info-label">Owner</span>
+						<span class="info-value">{{ row.owner_name or "—" }}</span>
+					</div>
+				</div>
+			</div>
+
+			<div class="invoice-body">
+				<div class="amounts-grid">
+					<div class="amounts-col">
+						<h4>Sales</h4>
+						<div class="amount-line">
+							<span class="lbl">Total Quantity</span>
+							<span class="val">{{ row.total_qty }}</span>
+						</div>
+						<div class="amount-line">
+							<span class="lbl">Total Selling Amount</span>
+							<span class="val">{{ row.total_selling_price_display }}</span>
+						</div>
+						<div class="amount-line">
+							<span class="lbl">Total Commission</span>
+							<span class="val">{{ row.total_commission_display }}</span>
+						</div>
+					</div>
+					<div class="amounts-col">
+						<h4>Deposits</h4>
+						<div class="amount-line">
+							<span class="lbl">Deposit Amount</span>
+							<span class="val">{{ row.deposit_amount_display }}</span>
+						</div>
+						<div class="amount-line">
+							<span class="lbl">Bank Charge</span>
+							<span class="val">{{ row.bank_charge_display }}</span>
+						</div>
+						<div class="amount-line">
+							<span class="lbl">Net Deposit</span>
+							<span class="val">{{ row.net_deposit_display }}</span>
+						</div>
+						<div class="amount-line">
+							<span class="lbl">Balance (Due)</span>
+							<span class="val">{{ row.balance_tk_display }}</span>
+						</div>
+					</div>
+				</div>
+
+				{% if row["items"] %}
+				<div class="sub-table-title">Items Sold</div>
+				<table class="sub-table">
+					<thead>
+						<tr>
+							<th>Item</th>
+							<th class="num">Qty</th>
+							<th class="num">Rate</th>
+							<th class="num">Running Price</th>
+							<th class="num">Amount</th>
+							<th class="num">Commission</th>
+						</tr>
+					</thead>
+					<tbody>
+						{% for item in row["items"] %}
+						<tr>
+							<td>{{ item.item_name }}</td>
+							<td class="num">{{ item.qty }}</td>
+							<td class="num">{{ item.regular_price_display }}</td>
+							<td class="num">{{ item.running_price_display }}</td>
+							<td class="num">{{ item.amount_display }}</td>
+							<td class="num">{{ item.commission_amount_display }}</td>
+						</tr>
+						{% endfor %}
+					</tbody>
+				</table>
+				{% endif %}
+
+				{% if row["payments"] %}
+				<div class="sub-table-title">Payment Entries</div>
+				<table class="sub-table">
+					<thead>
+						<tr>
+							<th>Payment Entry</th>
+							<th>Deposit Slip / Txn ID</th>
+							<th>Bank</th>
+							<th>Account</th>
+							<th class="num">Deposit</th>
+							<th class="num">Charge</th>
+							<th class="num">Net</th>
+						</tr>
+					</thead>
+					<tbody>
+						{% for pay in row["payments"] %}
+						<tr>
+							<td>{{ pay.payment_name }}</td>
+							<td>{{ pay.deposit_slip_no or "—" }}</td>
+							<td>{{ pay.bank_name or "—" }}</td>
+							<td>{{ pay.deposit_account_name or "—" }}</td>
+							<td class="num">{{ pay.deposit_amount_display }}</td>
+							<td class="num">{{ pay.bank_charge_display }}</td>
+							<td class="num">{{ pay.net_deposit_display }}</td>
+						</tr>
+						{% endfor %}
+					</tbody>
+				</table>
+				{% endif %}
+			</div>
+		</div>
+		{% endfor %}
+	{% else %}
+		<div class="empty-msg">No records found for the selected filters.</div>
+	{% endif %}
+
+	<div class="footer">
+		{{ footer_note }} — {{ rows|length }} invoice(s)
+	</div>
+</body>
+</html>
