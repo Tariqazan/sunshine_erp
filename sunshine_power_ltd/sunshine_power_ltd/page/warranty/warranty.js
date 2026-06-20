@@ -154,14 +154,13 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 
 					<div class="wc-hint-box wc-settle-hint"></div>
 
-					<div class="wc-settle-fields-full">
+					<div class="wc-settle-fields">
 						<div class="wc-form-grid">
-							<div class="wc-field wc-f-receive-wh"></div>
-							<div class="wc-field wc-f-condition"></div>
+							<div class="wc-field wc-f-receive-wh wc-settle-wh-receive"></div>
+							<div class="wc-field wc-f-condition wc-settle-wh-condition"></div>
+							<div class="wc-field wc-f-target-wh wc-settle-wh-target"></div>
+							<div class="wc-field wc-f-replacement-wh wc-settle-wh-replace"></div>
 						</div>
-					</div>
-					<div class="wc-form-grid">
-						<div class="wc-field wc-f-replacement-wh" style="grid-column:1/-1;"></div>
 					</div>
 
 					<div class="wc-item-list wc-items-settle"></div>
@@ -207,22 +206,46 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 	});
 	controls.receive_wh = make_control(".wc-f-receive-wh", {
 		fieldname: "receive_warehouse",
-		label: __("Where to receive returned item"),
+		label: __("Receive warehouse"),
 		fieldtype: "Link",
 		options: "Warehouse",
+		reqd: 1,
 	});
 	controls.condition = make_control(".wc-f-condition", {
 		fieldname: "product_condition",
 		label: __("Product condition"),
 		fieldtype: "Select",
 		options: "\nDamaged\nSellable\nRepairable",
+		reqd: 1,
+	});
+	controls.target_wh = make_control(".wc-f-target-wh", {
+		fieldname: "target_warehouse",
+		label: __("Move to warehouse"),
+		fieldtype: "Link",
+		options: "Warehouse",
+		reqd: 1,
 	});
 	controls.replacement_wh = make_control(".wc-f-replacement-wh", {
 		fieldname: "replacement_warehouse",
-		label: __("Give replacement from warehouse"),
+		label: __("Replacement from warehouse"),
 		fieldtype: "Link",
 		options: "Warehouse",
+		reqd: 1,
 	});
+
+	const WarehouseHelper = {
+		bind_company(company) {
+			const filters = company ? { company, is_group: 0 } : { is_group: 0 };
+			["receive_wh", "target_wh", "replacement_wh"].forEach((key) => {
+				controls[key].get_query = () => ({ filters });
+			});
+		},
+		show_fields(mode) {
+			const is_full = mode === "full";
+			$w.find(".wc-settle-wh-receive, .wc-settle-wh-condition, .wc-settle-wh-target").toggle(is_full);
+			$w.find(".wc-settle-fields").show();
+		},
+	};
 
 	const esc = (v) => frappe.utils.escape_html(String(v ?? ""));
 	const to_flt = (v) => flt(v);
@@ -413,12 +436,13 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 
 			const $flow = $w.find(".wc-settle-flow");
 			const $hint = $w.find(".wc-settle-hint");
-			const $fullFields = $w.find(".wc-settle-fields-full");
 			const $btn = $w.find(".wc-btn-settle-complete");
+
+			WarehouseHelper.bind_company(data.company);
 
 			if (mode === "none") {
 				$flow.hide();
-				$fullFields.hide();
+				$w.find(".wc-settle-fields").hide();
 				$btn.prop("disabled", true);
 				$hint.text(__("No claim on this invoice. Pick one from the list below or search another."));
 				$w.find(".wc-items-settle").empty();
@@ -426,21 +450,14 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 			}
 
 			$btn.prop("disabled", false);
+			WarehouseHelper.show_fields(mode);
+
 			if (mode === "full") {
 				$flow.show().find(".wc-flow-step").addClass("on");
-				$fullFields.show();
-				$hint.html(
-					`<strong>${__("New claim from field")}</strong> — ${__("Product arrived? Fill warehouses below, enter replacement qty, then tap Complete. We receive stock, transfer by condition, and deliver replacement automatically.")}`
-				);
-				if (!controls.receive_wh.get_value() && state.context.default_receive_warehouse) {
-					controls.receive_wh.set_value(state.context.default_receive_warehouse);
-				}
+				$hint.text(__("Choose all warehouses from the dropdowns below, then tap Complete."));
 			} else {
 				$flow.show().find(".wc-flow-step").removeClass("on").last().addClass("on");
-				$fullFields.hide();
-				$hint.html(
-					`<strong>${__("Stock already received")}</strong> — ${__("Enter replacement qty and warehouse, then tap Complete.")}`
-				);
+				$hint.text(__("Choose replacement warehouse and qty, then tap Complete."));
 			}
 
 			$w.find(".wc-items-settle").html((data.items || []).map((row, idx) => {
@@ -530,8 +547,10 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 			if (mode === "full") {
 				args.receive_warehouse = controls.receive_wh.get_value();
 				args.product_condition = controls.condition.get_value();
-				if (!args.receive_warehouse) frappe.throw(__("Select where to receive returned item."));
+				args.target_warehouse = controls.target_wh.get_value();
+				if (!args.receive_warehouse) frappe.throw(__("Select receive warehouse."));
 				if (!args.product_condition) frappe.throw(__("Select product condition."));
+				if (!args.target_warehouse) frappe.throw(__("Select move to warehouse."));
 			}
 
 			const msg = mode === "full"
@@ -557,9 +576,6 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		});
 		state.context = res.message || {};
 		TabManager.init(state.context);
-		if (state.context.default_receive_warehouse) {
-			controls.receive_wh.set_value(state.context.default_receive_warehouse);
-		}
 	}
 
 	$w.on("click", ".wc-tab", function () {

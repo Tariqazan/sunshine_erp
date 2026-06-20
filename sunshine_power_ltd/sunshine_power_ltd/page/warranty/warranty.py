@@ -24,6 +24,12 @@ def _has_warranty_field(doctype, fieldname):
 	return frappe.db.has_column(doctype, fieldname)
 
 
+def _get_company_warehouse(company):
+	if not company:
+		return None
+	return frappe.db.get_value("Warehouse", {"company": company, "is_group": 0}, "name")
+
+
 @frappe.whitelist()
 def get_warranty_context():
 	user = frappe.session.user
@@ -47,12 +53,6 @@ def get_warranty_context():
 
 	return {
 		"product_conditions": list(PRODUCT_CONDITIONS),
-		"condition_warehouses": {
-			"Damaged": "Warranty Damaged Warehouse",
-			"Sellable": "Warranty Sellable Warehouse",
-			"Repairable": "Warranty Repair Warehouse",
-		},
-		"default_receive_warehouse": "Warranty Incoming Warehouse",
 		"is_administrator": is_administrator,
 		"show_claim_tab": show_claim_tab,
 		"show_settle_tab": show_settle_tab,
@@ -691,7 +691,7 @@ def create_warranty_return(sales_invoice, items, receive_warehouse=None, product
 
 	si = frappe.get_doc("Sales Invoice", sales_invoice)
 	claim_map = {row["sales_invoice_item"]: row for row in items}
-	placeholder_warehouse = receive_warehouse or _get_default_receive_warehouse(si.company)
+	company_wh = _get_company_warehouse(si.company)
 
 	from erpnext.controllers.sales_and_purchase_return import make_return_doc
 
@@ -713,6 +713,8 @@ def create_warranty_return(sales_invoice, items, receive_warehouse=None, product
 		if claim_qty <= 0:
 			continue
 
+		item_warehouse = source_item.warehouse or company_wh
+
 		return_doc.append(
 			"items",
 			{
@@ -724,7 +726,7 @@ def create_warranty_return(sales_invoice, items, receive_warehouse=None, product
 				"conversion_factor": source_item.conversion_factor or 1,
 				"qty": -claim_qty,
 				"rate": source_item.rate,
-				"warehouse": placeholder_warehouse,
+				"warehouse": item_warehouse,
 				"income_account": source_item.income_account,
 				"expense_account": source_item.expense_account,
 				"cost_center": source_item.cost_center,
@@ -795,6 +797,7 @@ def settle_warranty_claim(
 	return_invoice=None,
 	receive_warehouse=None,
 	product_condition=None,
+	target_warehouse=None,
 	replacement_warehouse=None,
 	items=None,
 ):
@@ -826,7 +829,8 @@ def settle_warranty_claim(
 			frappe.throw(_("Return invoice is already submitted."))
 
 		_submit_warranty_return_doc(return_doc, receive_warehouse, product_condition)
-		target_warehouse = get_warranty_context()["condition_warehouses"].get(product_condition)
+		if not target_warehouse:
+			frappe.throw(_("Select warehouse to move received item to."))
 
 		transfer_items = _build_transfer_items_from_return(return_doc)
 		if transfer_items and target_warehouse and receive_warehouse != target_warehouse:
@@ -1069,10 +1073,3 @@ def _get_stock_balance(item_code, warehouse):
 	from erpnext.stock.utils import get_stock_balance
 
 	return _flt(get_stock_balance(item_code, warehouse))
-
-
-def _get_default_receive_warehouse(company=None):
-	warehouse = "Warranty Incoming Warehouse"
-	if company and not frappe.db.exists("Warehouse", {"name": warehouse, "company": company}):
-		warehouse = frappe.db.get_value("Warehouse", {"company": company, "is_group": 0}, "name")
-	return warehouse
