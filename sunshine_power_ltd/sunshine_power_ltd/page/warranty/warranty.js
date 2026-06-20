@@ -1,7 +1,7 @@
-frappe.pages["warranty-claim"].on_page_load = function (wrapper) {
+frappe.pages["warranty"].on_page_load = function (wrapper) {
 	const page = frappe.ui.make_app_page({
 		parent: wrapper,
-		title: __("Warranty Claim"),
+		title: __("Warranty"),
 		single_column: true,
 	});
 
@@ -181,7 +181,7 @@ frappe.pages["warranty-claim"].on_page_load = function (wrapper) {
 	const InvoiceLoader = {
 		async load(search = {}) {
 			const res = await frappe.call({
-				method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty_claim.warranty_claim.search_sales_invoice",
+				method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.search_sales_invoice",
 				args: search,
 			});
 			state.invoice = res.message;
@@ -191,7 +191,7 @@ frappe.pages["warranty-claim"].on_page_load = function (wrapper) {
 		async reload() {
 			if (!state.invoice?.sales_invoice) return;
 			const res = await frappe.call({
-				method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty_claim.warranty_claim.load_sales_invoice",
+				method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.load_sales_invoice",
 				args: { sales_invoice: state.invoice.sales_invoice },
 			});
 			state.invoice = res.message;
@@ -357,7 +357,7 @@ frappe.pages["warranty-claim"].on_page_load = function (wrapper) {
 				__("Create Sales Invoice Return for {0} item(s)?", [items.length]),
 				async () => {
 					const res = await frappe.call({
-						method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty_claim.warranty_claim.create_warranty_return",
+						method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.create_warranty_return",
 						args: {
 							sales_invoice: state.invoice.sales_invoice,
 							items,
@@ -399,7 +399,7 @@ frappe.pages["warranty-claim"].on_page_load = function (wrapper) {
 				__("Create Material Transfer Stock Entry?"),
 				async () => {
 					const res = await frappe.call({
-						method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty_claim.warranty_claim.create_warranty_stock_transfer",
+						method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.create_warranty_stock_transfer",
 						args: {
 							sales_invoice: state.invoice.sales_invoice,
 							items,
@@ -435,7 +435,7 @@ frappe.pages["warranty-claim"].on_page_load = function (wrapper) {
 				__("Issue replacement delivery note for {0} item(s)?", [items.length]),
 				async () => {
 					const res = await frappe.call({
-						method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty_claim.warranty_claim.create_warranty_replacement",
+						method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.create_warranty_replacement",
 						args: {
 							sales_invoice: state.invoice.sales_invoice,
 							items,
@@ -479,7 +479,7 @@ frappe.pages["warranty-claim"].on_page_load = function (wrapper) {
 
 	async function setup_context() {
 		const res = await frappe.call({
-			method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty_claim.warranty_claim.get_warranty_claim_context",
+			method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.get_warranty_context",
 		});
 		state.context = res.message || {};
 		if (state.context.default_receive_warehouse) {

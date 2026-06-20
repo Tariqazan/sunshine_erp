@@ -7,13 +7,13 @@
  "modified": "2026-06-20 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Sunshine Power Ltd",
- "name": "warranty-claim",
+ "name": "warranty",
  "owner": "Administrator",
- "page_name": "warranty-claim",
+ "page_name": "warranty",
  "roles": [],
  "script": null,
  "standard": "Yes",
  "style": null,
  "system_page": 1,
- "title": "Warranty Claim"
+ "title": "Warranty"
 }

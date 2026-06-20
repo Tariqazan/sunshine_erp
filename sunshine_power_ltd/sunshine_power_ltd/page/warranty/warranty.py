@@ -25,7 +25,7 @@ def _has_warranty_field(doctype, fieldname):
 
 
 @frappe.whitelist()
-def get_warranty_claim_context():
+def get_warranty_context():
 	return {
 		"product_conditions": list(PRODUCT_CONDITIONS),
 		"condition_warehouses": {
