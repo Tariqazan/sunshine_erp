@@ -61,6 +61,130 @@ def get_warranty_context():
 
 
 @frappe.whitelist()
+def get_claim_queue(limit=40):
+	"""Warranty returns created by claim team — draft and submitted."""
+	frappe.has_permission("Sales Invoice", "read", throw=True)
+	limit = min(cint(limit) or 40, 100)
+
+	warranty_filter = ""
+	if _has_warranty_field("Sales Invoice", "custom_is_warranty_claim"):
+		warranty_filter = "AND IFNULL(si.custom_is_warranty_claim, 0) = 1"
+
+	product_condition_select = "'' AS product_condition"
+	if _has_warranty_field("Sales Invoice", "custom_warranty_product_condition"):
+		product_condition_select = "si.custom_warranty_product_condition AS product_condition"
+
+	rows = frappe.db.sql(
+		f"""
+		SELECT
+			si.name AS return_invoice,
+			si.return_against AS sales_invoice,
+			si.customer,
+			si.customer_name,
+			si.posting_date,
+			si.docstatus,
+			si.owner,
+			si.modified,
+			{product_condition_select},
+			SUM(ABS(sii.qty)) AS claimed_qty
+		FROM `tabSales Invoice` si
+		INNER JOIN `tabSales Invoice Item` sii ON sii.parent = si.name
+		WHERE si.is_return = 1
+			AND si.docstatus < 2
+			AND si.return_against IS NOT NULL
+			AND si.return_against != ''
+			{warranty_filter}
+		GROUP BY si.name, si.return_against, si.customer, si.customer_name,
+			si.posting_date, si.docstatus, si.owner, si.modified
+		ORDER BY si.modified DESC
+		LIMIT %s
+		""",
+		(limit,),
+		as_dict=True,
+	)
+
+	queue = []
+	for row in rows:
+		is_draft = cint(row.docstatus) == 0
+		queue.append({
+			"return_invoice": row.return_invoice,
+			"sales_invoice": row.sales_invoice,
+			"customer": row.customer,
+			"customer_name": row.customer_name,
+			"posting_date": row.posting_date,
+			"claimed_qty": _flt(row.claimed_qty),
+			"product_condition": row.product_condition or "",
+			"owner": row.owner,
+			"modified": row.modified,
+			"docstatus": row.docstatus,
+			"status": _("Draft — Submit Return") if is_draft else _("Submitted"),
+			"status_key": "draft" if is_draft else "submitted",
+		})
+
+	draft_count = sum(1 for row in queue if row["status_key"] == "draft")
+	return {"rows": queue, "draft_count": draft_count, "total_count": len(queue)}
+
+
+@frappe.whitelist()
+def get_settle_queue(limit=40):
+	"""Original invoices with submitted warranty claims still pending settlement."""
+	frappe.has_permission("Sales Invoice", "read", throw=True)
+	limit = min(cint(limit) or 40, 100)
+
+	warranty_filter = ""
+	if _has_warranty_field("Sales Invoice", "custom_is_warranty_claim"):
+		warranty_filter = "AND IFNULL(si.custom_is_warranty_claim, 0) = 1"
+
+	candidates = frappe.db.sql(
+		f"""
+		SELECT DISTINCT si.return_against AS sales_invoice
+		FROM `tabSales Invoice` si
+		WHERE si.is_return = 1
+			AND si.docstatus = 1
+			AND si.return_against IS NOT NULL
+			AND si.return_against != ''
+			{warranty_filter}
+		ORDER BY si.modified DESC
+		LIMIT %s
+		""",
+		(limit * 3,),
+		as_dict=True,
+	)
+
+	queue = []
+	for row in candidates:
+		sales_invoice = row.sales_invoice
+		try:
+			invoice_data = load_sales_invoice(sales_invoice)
+		except Exception:
+			continue
+
+		claimed = _flt(invoice_data["summary"].get("claimed_qty"))
+		replaced = _flt(invoice_data["summary"].get("replaced_qty"))
+		if claimed <= 0:
+			continue
+
+		pending = max(claimed - replaced, 0)
+		if pending <= 0:
+			continue
+
+		queue.append({
+			"sales_invoice": sales_invoice,
+			"customer": invoice_data.get("customer"),
+			"customer_name": invoice_data.get("customer_name"),
+			"posting_date": invoice_data.get("posting_date"),
+			"claimed_qty": claimed,
+			"replaced_qty": replaced,
+			"pending_qty": pending,
+			"status": invoice_data["summary"].get("status") or "Returned",
+		})
+		if len(queue) >= limit:
+			break
+
+	return {"rows": queue, "total_count": len(queue)}
+
+
+@frappe.whitelist()
 def search_sales_invoice(invoice_no=None, barcode=None):
 	invoice_name = _resolve_sales_invoice(invoice_no, barcode)
 	if not invoice_name:
@@ -527,6 +651,35 @@ def create_warranty_return(sales_invoice, items, receive_warehouse, product_cond
 		"name": return_doc.name,
 		"docstatus": return_doc.docstatus,
 		"invoice": load_sales_invoice(sales_invoice),
+	}
+
+
+@frappe.whitelist()
+def submit_warranty_return(return_invoice):
+	frappe.has_permission("Sales Invoice", "submit", throw=True)
+
+	if not frappe.db.exists("Sales Invoice", return_invoice):
+		frappe.throw(_("Return invoice {0} not found.").format(return_invoice))
+
+	return_doc = frappe.get_doc("Sales Invoice", return_invoice)
+	if not cint(return_doc.is_return):
+		frappe.throw(_("Only return invoices can be submitted here."))
+	if return_doc.docstatus != 0:
+		frappe.throw(_("Return invoice is already submitted or cancelled."))
+
+	if _has_warranty_field("Sales Invoice", "custom_is_warranty_claim"):
+		if not cint(return_doc.custom_is_warranty_claim):
+			frappe.throw(_("This is not a warranty return invoice."))
+
+	return_doc.submit()
+
+	sales_invoice = return_doc.return_against
+	return {
+		"doctype": "Sales Invoice",
+		"name": return_doc.name,
+		"docstatus": return_doc.docstatus,
+		"sales_invoice": sales_invoice,
+		"invoice": load_sales_invoice(sales_invoice) if sales_invoice else None,
 	}
 
 
