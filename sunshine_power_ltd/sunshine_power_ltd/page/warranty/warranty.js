@@ -176,7 +176,7 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 	});
 
 	const esc = (v) => frappe.utils.escape_html(String(v ?? ""));
-	const flt = (v) => frappe.utils.flt(v);
+	const to_flt = (v) => flt(v);
 
 	const InvoiceLoader = {
 		async load(search = {}) {
@@ -211,10 +211,10 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 			const status = (summary?.status || "Draft").toLowerCase();
 			const cards = [
 				{ lbl: __("Status"), val: summary?.status || "Draft", cls: status },
-				{ lbl: __("Claimed Qty"), val: flt(summary?.claimed_qty) },
-				{ lbl: __("Returned Qty"), val: flt(summary?.returned_qty) },
-				{ lbl: __("Replaced Qty"), val: flt(summary?.replaced_qty) },
-				{ lbl: __("Pending Qty"), val: flt(summary?.pending_qty), accent: summary?.pending_qty > 0 },
+				{ lbl: __("Claimed Qty"), val: to_flt(summary?.claimed_qty) },
+				{ lbl: __("Returned Qty"), val: to_flt(summary?.returned_qty) },
+				{ lbl: __("Replaced Qty"), val: to_flt(summary?.replaced_qty) },
+				{ lbl: __("Pending Qty"), val: to_flt(summary?.pending_qty), accent: summary?.pending_qty > 0 },
 			];
 			$w.find(".wc-summary-panel").html(
 				cards.map((c) => `
@@ -247,10 +247,10 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 					<tr class="${row_cls}" data-idx="${idx}">
 						<td>${esc(row.item_code)}</td>
 						<td>${esc(row.item_name)}</td>
-						<td class="num">${flt(row.sold_qty)}</td>
-						<td class="num">${flt(row.claimed_qty)}</td>
-						<td class="num"><input type="number" min="0" step="1" class="wc-claim-qty" value="${flt(row.claim_qty)}" ${row.fully_claimed ? "disabled" : ""}></td>
-						<td class="num">${flt(row.remaining_qty)}</td>
+						<td class="num">${to_flt(row.sold_qty)}</td>
+						<td class="num">${to_flt(row.claimed_qty)}</td>
+						<td class="num"><input type="number" min="0" step="1" class="wc-claim-qty" value="${to_flt(row.claim_qty)}" ${row.fully_claimed ? "disabled" : ""}></td>
+						<td class="num">${to_flt(row.remaining_qty)}</td>
 						<td><input type="text" class="wc-serial-no" value="${esc(row.serial_no)}" placeholder="${row.has_serial_no ? __("Serial No") : ""}" ${row.fully_claimed ? "disabled" : ""}></td>
 						<td><input type="text" class="wc-batch-no" value="${esc(row.batch_no)}" placeholder="${row.has_batch_no ? __("Batch No") : ""}" ${row.fully_claimed ? "disabled" : ""}></td>
 						<td class="num wc-transfer-qty-cell"><input type="number" min="0" step="1" class="wc-transfer-qty" value="0"></td>
@@ -287,7 +287,7 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 			const items = [];
 			(state.invoice?.items || []).forEach((row, idx) => {
 				const $tr = $w.find(`tr[data-idx="${idx}"]`);
-				const claim_qty = flt($tr.find(".wc-claim-qty").val());
+				const claim_qty = to_flt($tr.find(".wc-claim-qty").val());
 				if (claim_qty <= 0) return;
 				items.push({
 					sales_invoice_item: row.sales_invoice_item,
@@ -303,7 +303,7 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 			const items = [];
 			(state.invoice?.items || []).forEach((row, idx) => {
 				const $tr = $w.find(`tr[data-idx="${idx}"]`);
-				const transfer_qty = flt($tr.find(".wc-transfer-qty").val());
+				const transfer_qty = to_flt($tr.find(".wc-transfer-qty").val());
 				if (transfer_qty <= 0) return;
 				items.push({
 					sales_invoice_item: row.sales_invoice_item,
@@ -320,7 +320,7 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 			const items = [];
 			(state.invoice?.items || []).forEach((row, idx) => {
 				const $tr = $w.find(`tr[data-idx="${idx}"]`);
-				const replacement_qty = flt($tr.find(".wc-replacement-qty").val());
+				const replacement_qty = to_flt($tr.find(".wc-replacement-qty").val());
 				if (replacement_qty <= 0) return;
 				items.push({
 					sales_invoice_item: row.sales_invoice_item,
@@ -336,7 +336,7 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 				frappe.throw(__("Enter claim quantity for at least one item."));
 			}
 			items.forEach((row) => {
-				if (flt(row.claim_qty) <= 0) {
+				if (to_flt(row.claim_qty) <= 0) {
 					frappe.throw(__("Claim quantity cannot be zero."));
 				}
 			});
@@ -470,7 +470,7 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 						<div><a href="${frappe.utils.get_form_link(row.doctype, row.reference, true)}">${esc(row.reference)}</a>
 						<span class="text-muted"> · ${esc(row.type)} · ${esc(frappe.datetime.str_to_user(row.date))}</span></div>
 						<div>${__("Items")}: ${esc(row.items || "")}</div>
-						<div>${__("Qty")}: ${flt(row.qty)} · ${__("Status")}: ${esc(row.status)} ${row.detail ? `· ${esc(row.detail)}` : ""}</div>
+						<div>${__("Qty")}: ${to_flt(row.qty)} · ${__("Status")}: ${esc(row.status)} ${row.detail ? `· ${esc(row.detail)}` : ""}</div>
 					</div>`
 				).join("")
 			);
