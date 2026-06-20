@@ -32,7 +32,8 @@ def get_warranty_context():
 
 	can_claim = frappe.has_permission("Sales Invoice", "create", user=user)
 	can_settle = (
-		frappe.has_permission("Delivery Note", "create", user=user)
+		frappe.has_permission("Sales Invoice", "submit", user=user)
+		or frappe.has_permission("Delivery Note", "create", user=user)
 		or frappe.has_permission("Stock Entry", "create", user=user)
 	)
 
@@ -62,17 +63,13 @@ def get_warranty_context():
 
 @frappe.whitelist()
 def get_claim_queue(limit=40):
-	"""Warranty returns created by claim team — draft and submitted."""
+	"""Claims registered by field team — qty only, awaiting settle team."""
 	frappe.has_permission("Sales Invoice", "read", throw=True)
 	limit = min(cint(limit) or 40, 100)
 
 	warranty_filter = ""
 	if _has_warranty_field("Sales Invoice", "custom_is_warranty_claim"):
 		warranty_filter = "AND IFNULL(si.custom_is_warranty_claim, 0) = 1"
-
-	product_condition_select = "'' AS product_condition"
-	if _has_warranty_field("Sales Invoice", "custom_warranty_product_condition"):
-		product_condition_select = "si.custom_warranty_product_condition AS product_condition"
 
 	rows = frappe.db.sql(
 		f"""
@@ -85,7 +82,6 @@ def get_claim_queue(limit=40):
 			si.docstatus,
 			si.owner,
 			si.modified,
-			{product_condition_select},
 			SUM(ABS(sii.qty)) AS claimed_qty
 		FROM `tabSales Invoice` si
 		INNER JOIN `tabSales Invoice Item` sii ON sii.parent = si.name
@@ -113,21 +109,20 @@ def get_claim_queue(limit=40):
 			"customer_name": row.customer_name,
 			"posting_date": row.posting_date,
 			"claimed_qty": _flt(row.claimed_qty),
-			"product_condition": row.product_condition or "",
 			"owner": row.owner,
 			"modified": row.modified,
 			"docstatus": row.docstatus,
-			"status": _("Draft — Submit Return") if is_draft else _("Submitted"),
-			"status_key": "draft" if is_draft else "submitted",
+			"status": _("Registered — with Settle Team") if is_draft else _("Received in Stock"),
+			"status_key": "registered" if is_draft else "received",
 		})
 
-	draft_count = sum(1 for row in queue if row["status_key"] == "draft")
-	return {"rows": queue, "draft_count": draft_count, "total_count": len(queue)}
+	registered_count = sum(1 for row in queue if row["status_key"] == "registered")
+	return {"rows": queue, "registered_count": registered_count, "total_count": len(queue)}
 
 
 @frappe.whitelist()
 def get_settle_queue(limit=40):
-	"""Original invoices with submitted warranty claims still pending settlement."""
+	"""Draft claims awaiting receive/submit, and submitted claims pending replacement."""
 	frappe.has_permission("Sales Invoice", "read", throw=True)
 	limit = min(cint(limit) or 40, 100)
 
@@ -137,14 +132,21 @@ def get_settle_queue(limit=40):
 
 	candidates = frappe.db.sql(
 		f"""
-		SELECT DISTINCT si.return_against AS sales_invoice
+		SELECT
+			si.return_against AS sales_invoice,
+			si.name AS return_invoice,
+			si.docstatus,
+			SUM(ABS(sii.qty)) AS return_qty,
+			MAX(si.modified) AS modified
 		FROM `tabSales Invoice` si
+		INNER JOIN `tabSales Invoice Item` sii ON sii.parent = si.name
 		WHERE si.is_return = 1
-			AND si.docstatus = 1
+			AND si.docstatus < 2
 			AND si.return_against IS NOT NULL
 			AND si.return_against != ''
 			{warranty_filter}
-		ORDER BY si.modified DESC
+		GROUP BY si.return_against, si.name, si.docstatus
+		ORDER BY modified DESC
 		LIMIT %s
 		""",
 		(limit * 3,),
@@ -152,15 +154,40 @@ def get_settle_queue(limit=40):
 	)
 
 	queue = []
+	seen = set()
 	for row in candidates:
 		sales_invoice = row.sales_invoice
+		if sales_invoice in seen:
+			continue
+
 		try:
 			invoice_data = load_sales_invoice(sales_invoice)
 		except Exception:
 			continue
 
+		is_draft = cint(row.docstatus) == 0
 		claimed = _flt(invoice_data["summary"].get("claimed_qty"))
+		registered = _flt(invoice_data["summary"].get("registered_qty"))
 		replaced = _flt(invoice_data["summary"].get("replaced_qty"))
+
+		if is_draft:
+			queue.append({
+				"sales_invoice": sales_invoice,
+				"return_invoice": row.return_invoice,
+				"customer": invoice_data.get("customer"),
+				"customer_name": invoice_data.get("customer_name"),
+				"posting_date": invoice_data.get("posting_date"),
+				"claimed_qty": _flt(row.return_qty),
+				"replaced_qty": replaced,
+				"pending_qty": _flt(row.return_qty),
+				"status": _("Awaiting Receive & Submit"),
+				"status_key": "awaiting_receive",
+			})
+			seen.add(sales_invoice)
+			if len(queue) >= limit:
+				break
+			continue
+
 		if claimed <= 0:
 			continue
 
@@ -170,14 +197,17 @@ def get_settle_queue(limit=40):
 
 		queue.append({
 			"sales_invoice": sales_invoice,
+			"return_invoice": row.return_invoice,
 			"customer": invoice_data.get("customer"),
 			"customer_name": invoice_data.get("customer_name"),
 			"posting_date": invoice_data.get("posting_date"),
 			"claimed_qty": claimed,
 			"replaced_qty": replaced,
 			"pending_qty": pending,
-			"status": invoice_data["summary"].get("status") or "Returned",
+			"status": _("Awaiting Replacement"),
+			"status_key": "awaiting_replacement",
 		})
+		seen.add(sales_invoice)
 		if len(queue) >= limit:
 			break
 
@@ -258,16 +288,19 @@ def load_sales_invoice(sales_invoice):
 		frappe.throw(_("Please search the original Sales Invoice, not a return."))
 
 	claimed_map = _get_claimed_qty_map(sales_invoice)
+	registered_map = _get_registered_qty_map(sales_invoice)
 	replaced_map = _get_replaced_qty_map(sales_invoice)
 	transfer_count = _get_transfer_count(sales_invoice)
+	draft_returns = _get_draft_returns(sales_invoice)
 	history = get_claim_history(sales_invoice)
 
 	items = []
 	for row in si.items:
 		claimed_qty = _flt(claimed_map.get(row.name, {}).get("claimed_qty"))
+		registered_qty = _flt(registered_map.get(row.name, {}).get("registered_qty"))
 		replaced_qty = _flt(replaced_map.get(row.name, {}).get("replaced_qty"))
 		sold_qty = _flt(row.qty)
-		remaining_qty = max(sold_qty - claimed_qty, 0)
+		remaining_qty = max(sold_qty - claimed_qty - registered_qty, 0)
 
 		item_meta = frappe.get_cached_value(
 			"Item",
@@ -283,6 +316,7 @@ def load_sales_invoice(sales_invoice):
 				"item_name": row.item_name or row.item_code,
 				"sold_qty": sold_qty,
 				"claimed_qty": claimed_qty,
+				"registered_qty": registered_qty,
 				"replaced_qty": replaced_qty,
 				"remaining_qty": remaining_qty,
 				"claim_qty": 0,
@@ -309,6 +343,9 @@ def load_sales_invoice(sales_invoice):
 		"items": items,
 		"summary": summary,
 		"history": history,
+		"draft_returns": draft_returns,
+		"has_draft_return": bool(draft_returns),
+		"pending_return_invoice": draft_returns[0]["name"] if draft_returns else "",
 	}
 
 
@@ -337,7 +374,7 @@ def get_claim_history(sales_invoice):
 			SUM(ABS(sii.qty)) AS claimed_qty
 		FROM `tabSales Invoice` si
 		INNER JOIN `tabSales Invoice Item` sii ON sii.parent = si.name
-		WHERE si.docstatus = 1
+		WHERE si.docstatus < 2
 			AND si.is_return = 1
 			AND si.return_against = %s
 			{warranty_filter}
@@ -409,7 +446,8 @@ def get_claim_history(sales_invoice):
 				"date": row.posting_date,
 				"items": row.items,
 				"qty": _flt(row.claimed_qty),
-				"status": _("Submitted") if row.docstatus == 1 else _("Draft"),
+				"status": _("Received") if row.docstatus == 1 else _("Registered"),
+				"status_key": "received" if row.docstatus == 1 else "registered",
 				"detail": row.product_condition or "",
 				"type": "Return",
 			}
@@ -471,6 +509,63 @@ def _get_claimed_qty_map(sales_invoice):
 	return {row.sales_invoice_item: row for row in rows}
 
 
+def _get_registered_qty_map(sales_invoice):
+	warranty_filter = ""
+	if _has_warranty_field("Sales Invoice", "custom_is_warranty_claim"):
+		warranty_filter = "AND IFNULL(si.custom_is_warranty_claim, 0) = 1"
+
+	rows = frappe.db.sql(
+		f"""
+		SELECT sii.sales_invoice_item, SUM(ABS(sii.qty)) AS registered_qty
+		FROM `tabSales Invoice Item` sii
+		INNER JOIN `tabSales Invoice` si ON si.name = sii.parent
+		WHERE si.docstatus = 0
+			AND si.is_return = 1
+			AND si.return_against = %s
+			AND sii.sales_invoice_item IS NOT NULL
+			AND sii.sales_invoice_item != ''
+			{warranty_filter}
+		GROUP BY sii.sales_invoice_item
+		""",
+		sales_invoice,
+		as_dict=True,
+	)
+	return {row.sales_invoice_item: row for row in rows}
+
+
+def _get_draft_returns(sales_invoice):
+	warranty_filter = ""
+	if _has_warranty_field("Sales Invoice", "custom_is_warranty_claim"):
+		warranty_filter = "AND IFNULL(si.custom_is_warranty_claim, 0) = 1"
+
+	rows = frappe.db.sql(
+		f"""
+		SELECT
+			si.name,
+			si.posting_date,
+			SUM(ABS(sii.qty)) AS claimed_qty
+		FROM `tabSales Invoice` si
+		INNER JOIN `tabSales Invoice Item` sii ON sii.parent = si.name
+		WHERE si.docstatus = 0
+			AND si.is_return = 1
+			AND si.return_against = %s
+			{warranty_filter}
+		GROUP BY si.name, si.posting_date
+		ORDER BY si.creation DESC
+		""",
+		sales_invoice,
+		as_dict=True,
+	)
+	return [
+		{
+			"name": row.name,
+			"posting_date": row.posting_date,
+			"claimed_qty": _flt(row.claimed_qty),
+		}
+		for row in rows
+	]
+
+
 def _get_replaced_qty_map(sales_invoice):
 	if not _has_warranty_field("Delivery Note", "custom_warranty_sales_invoice"):
 		return {}
@@ -510,15 +605,16 @@ def _get_transfer_count(sales_invoice):
 
 def _build_summary(sales_invoice, customer, items, history, transfer_count):
 	claimed_qty = sum(_flt(row.get("claimed_qty")) for row in items)
+	registered_qty = sum(_flt(row.get("registered_qty")) for row in items)
 	replaced_qty = sum(_flt(row.get("replaced_qty")) for row in items)
 	returned_qty = sum(
 		_flt(row.get("qty"))
 		for row in history
-		if row.get("type") == "Return"
+		if row.get("type") == "Return" and row.get("status_key") == "received"
 	)
 	pending_qty = sum(max(_flt(row.get("remaining_qty")), 0) for row in items)
 
-	status = "Draft"
+	status = "Registered" if registered_qty > 0 and claimed_qty <= 0 else "Draft"
 	if returned_qty > 0:
 		status = "Returned"
 	if transfer_count > 0:
@@ -532,6 +628,7 @@ def _build_summary(sales_invoice, customer, items, history, transfer_count):
 		"sales_invoice": sales_invoice,
 		"customer": customer,
 		"claimed_qty": claimed_qty,
+		"registered_qty": registered_qty,
 		"returned_qty": returned_qty,
 		"replaced_qty": replaced_qty,
 		"pending_qty": pending_qty,
@@ -576,32 +673,27 @@ def _validate_claim_items(sales_invoice, items):
 
 
 @frappe.whitelist()
-def create_warranty_return(sales_invoice, items, receive_warehouse, product_condition, submit=0):
+def create_warranty_return(sales_invoice, items, receive_warehouse=None, product_condition=None, submit=0):
+	"""Claim team registers qty only — draft return without stock movement."""
 	frappe.has_permission("Sales Invoice", "create", throw=True)
 
 	items = _parse_json(items)
 	_validate_claim_items(sales_invoice, items)
 
-	if not receive_warehouse:
-		frappe.throw(_("Receive Warehouse is mandatory."))
-	if product_condition not in PRODUCT_CONDITIONS:
-		frappe.throw(_("Select a valid product condition."))
-
 	si = frappe.get_doc("Sales Invoice", sales_invoice)
 	claim_map = {row["sales_invoice_item"]: row for row in items}
+	placeholder_warehouse = receive_warehouse or _get_default_receive_warehouse(si.company)
 
 	from erpnext.controllers.sales_and_purchase_return import make_return_doc
 
 	return_doc = frappe.get_doc(make_return_doc("Sales Invoice", sales_invoice))
 	return_doc.set("items", [])
 	return_doc.update_outstanding_for_self = 0
-	return_doc.update_stock = 1
+	return_doc.update_stock = 0
 	return_doc.posting_date = nowdate()
 
 	if _has_warranty_field("Sales Invoice", "custom_is_warranty_claim"):
 		return_doc.custom_is_warranty_claim = 1
-	if _has_warranty_field("Sales Invoice", "custom_warranty_product_condition"):
-		return_doc.custom_warranty_product_condition = product_condition
 
 	for source_item in si.items:
 		claim = claim_map.get(source_item.name)
@@ -623,7 +715,7 @@ def create_warranty_return(sales_invoice, items, receive_warehouse, product_cond
 				"conversion_factor": source_item.conversion_factor or 1,
 				"qty": -claim_qty,
 				"rate": source_item.rate,
-				"warehouse": receive_warehouse,
+				"warehouse": placeholder_warehouse,
 				"income_account": source_item.income_account,
 				"expense_account": source_item.expense_account,
 				"cost_center": source_item.cost_center,
@@ -643,9 +735,6 @@ def create_warranty_return(sales_invoice, items, receive_warehouse, product_cond
 	return_doc.run_method("calculate_taxes_and_totals")
 	return_doc.insert()
 
-	if cint(submit):
-		return_doc.submit()
-
 	return {
 		"doctype": "Sales Invoice",
 		"name": return_doc.name,
@@ -655,11 +744,17 @@ def create_warranty_return(sales_invoice, items, receive_warehouse, product_cond
 
 
 @frappe.whitelist()
-def submit_warranty_return(return_invoice):
+def submit_warranty_return(return_invoice, receive_warehouse=None, product_condition=None):
+	"""Settle team receives product — set warehouse, condition, and submit return."""
 	frappe.has_permission("Sales Invoice", "submit", throw=True)
 
 	if not frappe.db.exists("Sales Invoice", return_invoice):
 		frappe.throw(_("Return invoice {0} not found.").format(return_invoice))
+
+	if not receive_warehouse:
+		frappe.throw(_("Receive Warehouse is mandatory."))
+	if product_condition not in PRODUCT_CONDITIONS:
+		frappe.throw(_("Select a valid product condition."))
 
 	return_doc = frappe.get_doc("Sales Invoice", return_invoice)
 	if not cint(return_doc.is_return):
@@ -671,6 +766,14 @@ def submit_warranty_return(return_invoice):
 		if not cint(return_doc.custom_is_warranty_claim):
 			frappe.throw(_("This is not a warranty return invoice."))
 
+	if _has_warranty_field("Sales Invoice", "custom_warranty_product_condition"):
+		return_doc.custom_warranty_product_condition = product_condition
+
+	return_doc.update_stock = 1
+	for item in return_doc.items:
+		item.warehouse = receive_warehouse
+
+	return_doc.save()
 	return_doc.submit()
 
 	sales_invoice = return_doc.return_against
@@ -679,6 +782,7 @@ def submit_warranty_return(return_invoice):
 		"name": return_doc.name,
 		"docstatus": return_doc.docstatus,
 		"sales_invoice": sales_invoice,
+		"receive_warehouse": receive_warehouse,
 		"invoice": load_sales_invoice(sales_invoice) if sales_invoice else None,
 	}
 
@@ -868,3 +972,10 @@ def _get_stock_balance(item_code, warehouse):
 	from erpnext.stock.utils import get_stock_balance
 
 	return _flt(get_stock_balance(item_code, warehouse))
+
+
+def _get_default_receive_warehouse(company=None):
+	warehouse = "Warranty Incoming Warehouse"
+	if company and not frappe.db.exists("Warehouse", {"name": warehouse, "company": company}):
+		warehouse = frappe.db.get_value("Warehouse", {"company": company, "is_group": 0}, "name")
+	return warehouse
