@@ -49,6 +49,41 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 .wc-history-item { border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; margin-bottom:8px; font-size:12px; }
 .wc-history-item a { font-weight:600; }
 .wc-alert { padding:10px 12px; border-radius:8px; background:#fff7ed; border:1px solid #fdba74; color:#9a3412; font-size:12px; margin-bottom:12px; }
+.wc-flow { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+.wc-flow-step { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc; font-size:12px; color:#475569; }
+.wc-flow-step strong { color:#111827; display:block; margin-bottom:2px; }
+.wc-flow-num { flex:0 0 24px; height:24px; border-radius:999px; background:#2563eb; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.wc-item-card { border:1px solid #e2e8f0; border-radius:10px; padding:12px; margin-bottom:10px; background:#fff; }
+.wc-item-card.done { opacity:.7; background:#f8fafc; }
+.wc-item-card-head { font-weight:700; color:#111827; margin-bottom:8px; font-size:13px; }
+.wc-item-card-meta { display:flex; flex-wrap:wrap; gap:8px 14px; font-size:11px; color:#64748b; margin-bottom:10px; }
+.wc-item-card-meta span strong { color:#334155; }
+.wc-item-card-field { margin-bottom:8px; }
+.wc-item-card-field label { display:block; font-size:10px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:4px; }
+.wc-item-card-field input { width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:8px; font-size:14px; }
+.wc-mobile-items { display:none; }
+.wc-desktop-table { display:block; }
+.wc-step-note { font-size:11px; color:#64748b; margin:0 0 10px; line-height:1.5; }
+.wc-advanced { border:1px dashed #cbd5e1; border-radius:10px; padding:12px; }
+@media (max-width: 768px) {
+	.wc-wrap { padding:8px 0 90px; }
+	.wc-card { padding:14px; border-radius:10px; }
+	.wc-search-row, .wc-form-row { flex-direction:column; align-items:stretch; }
+	.wc-field { min-width:0; flex:1 1 auto; }
+	.wc-actions { width:100%; }
+	.wc-actions .btn { flex:1; min-height:40px; }
+	.wc-summary-row { gap:8px; }
+	.wc-scard { flex:1 1 calc(50% - 8px); min-width:calc(50% - 8px); }
+	.wc-meta { flex-direction:column; gap:6px; }
+	.wc-meta-extra { display:none; }
+	.wc-mobile-items { display:block; }
+	.wc-desktop-table { display:none; }
+	.wc-grid-2 { grid-template-columns:1fr; }
+	.wc-sticky-actions { padding:10px 12px; }
+	.wc-sticky-actions .btn { flex:1; min-height:40px; }
+	.wc-f-barcode { display:none; }
+	.wc-btn-return, .wc-btn-replacement { width:100%; min-height:42px; font-size:13px; }
+}
 </style>`);
 	}
 
@@ -68,8 +103,26 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 
 			<div class="wc-summary-row wc-summary-panel" style="display:none;"></div>
 			<div class="wc-invoice-panel" style="display:none;">
+				<div class="wc-card wc-flow-card">
+					<div class="wc-title">${__("Warranty Flow")}</div>
+					<div class="wc-flow">
+						<div class="wc-flow-step">
+							<div class="wc-flow-num">1</div>
+							<div><strong>${__("Receive returned product")}</strong>${__("Enter claim qty and create a draft Sales Invoice Return. Submit the return only after the customer hands over the product.")}</div>
+						</div>
+						<div class="wc-flow-step">
+							<div class="wc-flow-num">2</div>
+							<div><strong>${__("Inspect & move stock")}</strong>${__("Optional. Transfer received items from incoming warehouse to damaged / sellable / repair warehouse.")}</div>
+						</div>
+						<div class="wc-flow-step">
+							<div class="wc-flow-num">3</div>
+							<div><strong>${__("Give replacement product")}</strong>${__("After the return invoice is submitted, enter replacement qty and create a Delivery Note to send the new product to the customer.")}</div>
+						</div>
+					</div>
+				</div>
+
 				<div class="wc-card">
-					<div class="wc-title">${__("Sales Invoice Details")}</div>
+					<div class="wc-title">${__("Invoice & Items")}</div>
 					<div class="wc-meta wc-invoice-meta"></div>
 					<div class="wc-alert wc-claim-alert" style="display:none;"></div>
 					<div class="wc-table-scroll">
@@ -79,29 +132,32 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 
 				<div class="wc-grid-2">
 					<div class="wc-card">
-						<div class="wc-title">${__("Receive Product")}</div>
+						<div class="wc-title">${__("Step 1 — Receive Product")}</div>
+						<p class="wc-step-note">${__("Creates a draft credit note (not submitted). Review and submit it in Sales Invoice when product is received.")}</p>
 						<div class="wc-form-row">
 							<div class="wc-field wc-f-receive-wh"></div>
 							<div class="wc-field wc-f-condition"></div>
 						</div>
-						<button class="btn btn-primary btn-sm wc-btn-return">${__("Create Warranty Return")}</button>
+						<button class="btn btn-primary btn-sm wc-btn-return">${__("Create Draft Return")}</button>
 					</div>
 
 					<div class="wc-card">
-						<div class="wc-title">${__("Warehouse Transfer")}</div>
+						<div class="wc-title">${__("Step 3 — Replacement Product")}</div>
+						<p class="wc-step-note">${__("Available only after the return invoice is submitted. Issues a Delivery Note to give new stock to the customer.")}</p>
+						<div class="wc-form-row">
+							<div class="wc-field wc-f-replacement-wh"></div>
+						</div>
+						<button class="btn btn-primary btn-sm wc-btn-replacement">${__("Issue Replacement")}</button>
+					</div>
+
+					<div class="wc-card wc-advanced">
+						<div class="wc-title">${__("Step 2 — Warehouse Transfer (Optional)")}</div>
+						<p class="wc-step-note">${__("Move inspected items between warranty warehouses.")}</p>
 						<div class="wc-form-row">
 							<div class="wc-field wc-f-source-wh"></div>
 							<div class="wc-field wc-f-target-wh"></div>
 						</div>
 						<button class="btn btn-default btn-sm wc-btn-transfer">${__("Create Stock Entry")}</button>
-					</div>
-
-					<div class="wc-card">
-						<div class="wc-title">${__("Replacement Product")}</div>
-						<div class="wc-form-row">
-							<div class="wc-field wc-f-replacement-wh"></div>
-						</div>
-						<button class="btn btn-default btn-sm wc-btn-replacement">${__("Issue Replacement Product")}</button>
 					</div>
 
 					<div class="wc-card">
@@ -211,10 +267,9 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 			const status = (summary?.status || "Draft").toLowerCase();
 			const cards = [
 				{ lbl: __("Status"), val: summary?.status || "Draft", cls: status },
-				{ lbl: __("Claimed Qty"), val: to_flt(summary?.claimed_qty) },
-				{ lbl: __("Returned Qty"), val: to_flt(summary?.returned_qty) },
-				{ lbl: __("Replaced Qty"), val: to_flt(summary?.replaced_qty) },
-				{ lbl: __("Pending Qty"), val: to_flt(summary?.pending_qty), accent: summary?.pending_qty > 0 },
+				{ lbl: __("Claimed"), val: to_flt(summary?.claimed_qty) },
+				{ lbl: __("Replaced"), val: to_flt(summary?.replaced_qty) },
+				{ lbl: __("Pending"), val: to_flt(summary?.pending_qty), accent: summary?.pending_qty > 0 },
 			];
 			$w.find(".wc-summary-panel").html(
 				cards.map((c) => `
@@ -227,10 +282,9 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		},
 		render_meta(data) {
 			$w.find(".wc-invoice-meta").html(`
-				<div><strong>${__("Sales Invoice")}:</strong> ${esc(data.sales_invoice)}</div>
+				<div><strong>${__("Invoice")}:</strong> ${esc(data.sales_invoice)}</div>
 				<div><strong>${__("Customer")}:</strong> ${esc(data.customer_name || data.customer)}</div>
-				<div><strong>${__("Posting Date")}:</strong> ${esc(frappe.datetime.str_to_user(data.posting_date))}</div>
-				<div><strong>${__("Company")}:</strong> ${esc(data.company)}</div>
+				<div class="wc-meta-extra"><strong>${__("Date")}:</strong> ${esc(frappe.datetime.str_to_user(data.posting_date))}</div>
 			`);
 			const fully_claimed = (data.items || []).every((row) => row.fully_claimed);
 			const $alert = $w.find(".wc-claim-alert");
@@ -241,43 +295,79 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 			}
 		},
 		render_items(items) {
-			const rows = (items || []).map((row, idx) => {
+			const build_row_inputs = (row, idx) => {
+				const disabled = row.fully_claimed ? "disabled" : "";
+				const can_replace = to_flt(row.claimed_qty) > 0;
+				return {
+					claim_qty: `<input type="number" min="0" step="1" class="wc-claim-qty" value="${to_flt(row.claim_qty)}" ${disabled}>`,
+					serial_no: row.has_serial_no
+						? `<input type="text" class="wc-serial-no" value="${esc(row.serial_no)}" placeholder="${__("Serial No")}" ${disabled}>`
+						: "",
+					replacement_qty: `<input type="number" min="0" step="1" class="wc-replacement-qty" value="0" ${can_replace ? "" : "disabled"}>`,
+				};
+			};
+
+			const mobile_cards = (items || []).map((row, idx) => {
+				const inputs = build_row_inputs(row, idx);
+				const card_cls = row.fully_claimed ? "done" : "";
+				return `
+					<div class="wc-item-card wc-item-row ${card_cls}" data-idx="${idx}">
+						<div class="wc-item-card-head">${esc(row.item_name || row.item_code)}</div>
+						<div class="wc-item-card-meta">
+							<span>${__("Sold")}: <strong>${to_flt(row.sold_qty)}</strong></span>
+							<span>${__("Claimed")}: <strong>${to_flt(row.claimed_qty)}</strong></span>
+							<span>${__("Left")}: <strong>${to_flt(row.remaining_qty)}</strong></span>
+						</div>
+						<div class="wc-item-card-field">
+							<label>${__("Claim Qty")}</label>
+							${inputs.claim_qty}
+						</div>
+						${row.has_serial_no ? `<div class="wc-item-card-field"><label>${__("Serial No")}</label>${inputs.serial_no}</div>` : `<input type="hidden" class="wc-serial-no" value="${esc(row.serial_no)}">`}
+						<input type="hidden" class="wc-batch-no" value="${esc(row.batch_no)}">
+						<input type="hidden" class="wc-transfer-qty" value="0">
+						<div class="wc-item-card-field">
+							<label>${__("Replacement Qty")}</label>
+							${inputs.replacement_qty}
+						</div>
+						<input type="hidden" class="wc-replacement-item-code" value="${esc(row.item_code)}">
+					</div>`;
+			}).join("");
+
+			const desktop_rows = (items || []).map((row, idx) => {
+				const inputs = build_row_inputs(row, idx);
 				const row_cls = row.fully_claimed ? "done-row" : row.remaining_qty <= 0 ? "warn-row" : "";
 				return `
-					<tr class="${row_cls}" data-idx="${idx}">
+					<tr class="wc-item-row ${row_cls}" data-idx="${idx}">
 						<td>${esc(row.item_code)}</td>
 						<td>${esc(row.item_name)}</td>
 						<td class="num">${to_flt(row.sold_qty)}</td>
 						<td class="num">${to_flt(row.claimed_qty)}</td>
-						<td class="num"><input type="number" min="0" step="1" class="wc-claim-qty" value="${to_flt(row.claim_qty)}" ${row.fully_claimed ? "disabled" : ""}></td>
+						<td class="num">${inputs.claim_qty}</td>
 						<td class="num">${to_flt(row.remaining_qty)}</td>
-						<td><input type="text" class="wc-serial-no" value="${esc(row.serial_no)}" placeholder="${row.has_serial_no ? __("Serial No") : ""}" ${row.fully_claimed ? "disabled" : ""}></td>
-						<td><input type="text" class="wc-batch-no" value="${esc(row.batch_no)}" placeholder="${row.has_batch_no ? __("Batch No") : ""}" ${row.fully_claimed ? "disabled" : ""}></td>
-						<td class="num wc-transfer-qty-cell"><input type="number" min="0" step="1" class="wc-transfer-qty" value="0"></td>
-						<td class="wc-replacement-item"><input type="text" class="wc-replacement-item-code" value="${esc(row.item_code)}"></td>
-						<td class="num"><input type="number" min="0" step="1" class="wc-replacement-qty" value="0"></td>
+						<td>${inputs.serial_no || "—"}</td>
+						<td class="num wc-replace-col">${inputs.replacement_qty}</td>
 					</tr>`;
 			}).join("");
 
 			$w.find(".wc-table-scroll").html(`
-				<table class="wc-tbl">
-					<thead>
-						<tr>
-							<th>${__("Item Code")}</th>
-							<th>${__("Item Name")}</th>
-							<th class="num">${__("Sold Qty")}</th>
-							<th class="num">${__("Prev. Claimed")}</th>
-							<th class="num">${__("Claim Qty")}</th>
-							<th class="num">${__("Remaining")}</th>
-							<th>${__("Serial No")}</th>
-							<th>${__("Batch No")}</th>
-							<th class="num">${__("Transfer Qty")}</th>
-							<th>${__("Replacement Item")}</th>
-							<th class="num">${__("Replacement Qty")}</th>
-						</tr>
-					</thead>
-					<tbody>${rows || `<tr><td colspan="11" class="wc-empty">${__("No items found")}</td></tr>`}</tbody>
-				</table>
+				<div class="wc-mobile-items">${mobile_cards || `<div class="wc-empty">${__("No items found")}</div>`}</div>
+				<div class="wc-desktop-table">
+					<table class="wc-tbl">
+						<thead>
+							<tr>
+								<th>${__("Item")}</th>
+								<th>${__("Name")}</th>
+								<th class="num">${__("Sold")}</th>
+								<th class="num">${__("Claimed")}</th>
+								<th class="num">${__("Claim Qty")}</th>
+								<th class="num">${__("Left")}</th>
+								<th>${__("Serial")}</th>
+								<th class="num">${__("Replace Qty")}</th>
+							</tr>
+						</thead>
+						<tbody>${desktop_rows || `<tr><td colspan="8" class="wc-empty">${__("No items found")}</td></tr>`}</tbody>
+					</table>
+				</div>
 			`);
 		},
 	};
@@ -286,15 +376,15 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		collect_claim_items() {
 			const items = [];
 			(state.invoice?.items || []).forEach((row, idx) => {
-				const $tr = $w.find(`tr[data-idx="${idx}"]`);
-				const claim_qty = to_flt($tr.find(".wc-claim-qty").val());
+				const $row = $w.find(`.wc-item-row[data-idx="${idx}"]`).first();
+				const claim_qty = to_flt($row.find(".wc-claim-qty").val());
 				if (claim_qty <= 0) return;
 				items.push({
 					sales_invoice_item: row.sales_invoice_item,
 					item_code: row.item_code,
 					claim_qty,
-					serial_no: $tr.find(".wc-serial-no").val(),
-					batch_no: $tr.find(".wc-batch-no").val(),
+					serial_no: $row.find(".wc-serial-no").val(),
+					batch_no: $row.find(".wc-batch-no").val(),
 				});
 			});
 			return items;
@@ -302,16 +392,19 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		collect_transfer_items() {
 			const items = [];
 			(state.invoice?.items || []).forEach((row, idx) => {
-				const $tr = $w.find(`tr[data-idx="${idx}"]`);
-				const transfer_qty = to_flt($tr.find(".wc-transfer-qty").val());
+				const $row = $w.find(`.wc-item-row[data-idx="${idx}"]`).first();
+				let transfer_qty = to_flt($row.find(".wc-transfer-qty").val());
+				if (transfer_qty <= 0) {
+					transfer_qty = to_flt(row.claimed_qty);
+				}
 				if (transfer_qty <= 0) return;
 				items.push({
 					sales_invoice_item: row.sales_invoice_item,
 					item_code: row.item_code,
 					uom: row.uom,
 					transfer_qty,
-					serial_no: $tr.find(".wc-serial-no").val(),
-					batch_no: $tr.find(".wc-batch-no").val(),
+					serial_no: $row.find(".wc-serial-no").val(),
+					batch_no: $row.find(".wc-batch-no").val(),
 				});
 			});
 			return items;
@@ -319,13 +412,13 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		collect_replacement_items() {
 			const items = [];
 			(state.invoice?.items || []).forEach((row, idx) => {
-				const $tr = $w.find(`tr[data-idx="${idx}"]`);
-				const replacement_qty = to_flt($tr.find(".wc-replacement-qty").val());
+				const $row = $w.find(`.wc-item-row[data-idx="${idx}"]`).first();
+				const replacement_qty = to_flt($row.find(".wc-replacement-qty").val());
 				if (replacement_qty <= 0) return;
 				items.push({
 					sales_invoice_item: row.sales_invoice_item,
 					item_code: row.item_code,
-					replacement_item_code: $tr.find(".wc-replacement-item-code").val() || row.item_code,
+					replacement_item_code: $row.find(".wc-replacement-item-code").val() || row.item_code,
 					replacement_qty,
 				});
 			});
@@ -344,7 +437,7 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 	};
 
 	const SalesReturnGenerator = {
-		async create(submit = 1) {
+		async create(submit = 0) {
 			const items = ClaimValidator.collect_claim_items();
 			ClaimValidator.validate_claim_items(items);
 
@@ -354,7 +447,7 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 			if (!product_condition) frappe.throw(__("Product Condition is mandatory."));
 
 			await frappe.confirm(
-				__("Create Sales Invoice Return for {0} item(s)?", [items.length]),
+				__("Create draft Sales Invoice Return for {0} item(s)? It will NOT be submitted automatically.", [items.length]),
 				async () => {
 					const res = await frappe.call({
 						method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.create_warranty_return",
@@ -366,21 +459,23 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 							submit,
 						},
 						freeze: true,
-						freeze_message: __("Creating warranty return..."),
+						freeze_message: __("Creating draft return..."),
 					});
-					this._handle_result(res.message, __("Warranty return created"));
+					this._handle_result(res.message);
 				}
 			);
 		},
-		_handle_result(message, title) {
+		_handle_result(message) {
 			state.session_docs.push(message);
 			state.invoice = message.invoice;
 			InvoiceLoader.render(state.invoice);
-			frappe.show_alert({
-				message: `${title}: ${message.name}`,
+			frappe.msgprint({
+				title: __("Draft Return Created"),
 				indicator: "green",
+				message: __("Return {0} saved as draft. Submit it after the customer returns the product, then use Step 3 to issue replacement.", [
+					message.name,
+				]),
 			});
-			frappe.set_route("Form", message.doctype, message.name);
 		},
 	};
 
@@ -427,6 +522,11 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		async create(submit = 1) {
 			const items = ClaimValidator.collect_replacement_items();
 			if (!items.length) frappe.throw(__("Enter replacement quantity for at least one item."));
+
+			const has_claimed = (state.invoice?.items || []).some((row) => to_flt(row.claimed_qty) > 0);
+			if (!has_claimed) {
+				frappe.throw(__("Submit the draft return invoice first. Replacement is allowed only after the return is submitted."));
+			}
 
 			const replacement_warehouse = controls.replacement_wh.get_value();
 			if (!replacement_warehouse) frappe.throw(__("Replacement Warehouse is mandatory."));
@@ -513,8 +613,8 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		$w.find(".wc-invoice-panel, .wc-summary-panel, .wc-action-bar").hide();
 	});
 
-	$w.find(".wc-btn-return").on("click", () => SalesReturnGenerator.create(1));
-	$w.find(".wc-btn-transfer").on("click", () => StockTransferGenerator.create(1));
+	$w.find(".wc-btn-return").on("click", () => SalesReturnGenerator.create(0));
+	$w.find(".wc-btn-transfer").on("click", () => StockTransferGenerator.create(0));
 	$w.find(".wc-btn-replacement").on("click", () => DeliveryNoteGenerator.create(1));
 	$w.find(".wc-btn-reload").on("click", () => InvoiceLoader.reload());
 

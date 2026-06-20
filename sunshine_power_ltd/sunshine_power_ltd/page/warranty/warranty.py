@@ -609,7 +609,7 @@ def create_warranty_replacement(
 		claimed_qty = _flt(claimed_map.get(si_item, {}).get("claimed_qty"))
 		if replacement_qty > claimed_qty:
 			frappe.throw(
-				_("Replacement quantity cannot exceed approved claim quantity for item {0}.").format(
+				_("Replacement quantity cannot exceed submitted claim quantity for item {0}. Submit the return invoice first.").format(
 					row.get("item_code") or si_item
 				)
 			)
