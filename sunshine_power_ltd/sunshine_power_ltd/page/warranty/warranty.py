@@ -26,6 +26,24 @@ def _has_warranty_field(doctype, fieldname):
 
 @frappe.whitelist()
 def get_warranty_context():
+	user = frappe.session.user
+	roles = set(frappe.get_roles(user))
+	is_administrator = user == "Administrator" or "Administrator" in roles
+
+	can_claim = frappe.has_permission("Sales Invoice", "create", user=user)
+	can_settle = (
+		frappe.has_permission("Delivery Note", "create", user=user)
+		or frappe.has_permission("Stock Entry", "create", user=user)
+	)
+
+	show_claim_tab = is_administrator or can_claim
+	show_settle_tab = is_administrator or can_settle
+	show_tab_switcher = is_administrator or (show_claim_tab and show_settle_tab)
+
+	default_tab = "claim"
+	if show_settle_tab and not show_claim_tab:
+		default_tab = "settle"
+
 	return {
 		"product_conditions": list(PRODUCT_CONDITIONS),
 		"condition_warehouses": {
@@ -34,6 +52,11 @@ def get_warranty_context():
 			"Repairable": "Warranty Repair Warehouse",
 		},
 		"default_receive_warehouse": "Warranty Incoming Warehouse",
+		"is_administrator": is_administrator,
+		"show_claim_tab": show_claim_tab,
+		"show_settle_tab": show_settle_tab,
+		"show_tab_switcher": show_tab_switcher,
+		"default_tab": default_tab,
 	}
 
 

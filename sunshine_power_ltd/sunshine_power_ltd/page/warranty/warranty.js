@@ -9,167 +9,175 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		invoice: null,
 		context: {},
 		session_docs: [],
+		active_tab: "claim",
 	};
 
 	if (!document.getElementById("wc-style")) {
 		$("head").append(`<style id="wc-style">
-.wc-wrap { padding: 10px 0 80px; }
-.wc-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:16px 18px; margin-bottom:14px; box-shadow:0 1px 4px rgba(0,0,0,.06); }
+.wc-wrap { padding:10px 0 24px; max-width:1100px; margin:0 auto; }
+.wc-hero { margin-bottom:14px; }
+.wc-hero h2 { margin:0 0 4px; font-size:22px; font-weight:700; color:#0f172a; }
+.wc-hero p { margin:0; font-size:13px; color:#64748b; }
+.wc-card { background:#fff; border:1px solid #e2e8f0; border-radius:14px; padding:16px 18px; margin-bottom:14px; box-shadow:0 1px 4px rgba(0,0,0,.05); }
+.wc-card.claim { border-top:3px solid #2563eb; }
+.wc-card.settle { border-top:3px solid #7c3aed; }
 .wc-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:#64748b; margin-bottom:12px; }
 .wc-search-row { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; }
 .wc-field { flex:1 1 220px; min-width:180px; }
 .wc-actions { display:flex; gap:8px; flex-wrap:wrap; }
 .wc-summary-row { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:14px; }
-.wc-scard { flex:1 1 130px; background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:12px 14px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
-.wc-scard.accent { border-color:#2563eb; background:#eff6ff; }
-.wc-scard.warn { border-color:#f59e0b; background:#fffbeb; }
-.wc-scard.ok { border-color:#10b981; background:#ecfdf5; }
-.wc-scard-lbl { font-size:10px; color:#6b7280; text-transform:uppercase; letter-spacing:.4px; margin-bottom:4px; }
-.wc-scard-val { font-size:16px; font-weight:700; color:#111827; }
-.wc-meta { display:flex; flex-wrap:wrap; gap:16px; font-size:12px; color:#475569; margin-bottom:12px; }
+.wc-scard { flex:1 1 120px; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:12px 14px; }
+.wc-scard-lbl { font-size:10px; color:#6b7280; text-transform:uppercase; margin-bottom:4px; }
+.wc-scard-val { font-size:18px; font-weight:700; color:#111827; }
+.wc-tabs { display:flex; gap:8px; margin-bottom:14px; padding:6px; background:#f1f5f9; border-radius:12px; }
+.wc-tab { flex:1; border:0; background:transparent; padding:12px 16px; border-radius:10px; font-size:13px; font-weight:600; color:#64748b; cursor:pointer; transition:all .2s; }
+.wc-tab.active { background:#fff; color:#0f172a; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+.wc-tab[data-tab="claim"].active { color:#1d4ed8; }
+.wc-tab[data-tab="settle"].active { color:#6d28d9; }
+.wc-tab-icon { display:block; font-size:10px; font-weight:500; opacity:.75; margin-top:2px; }
+.wc-tab-panel { display:none; }
+.wc-tab-panel.active { display:block; }
+.wc-phase-banner { display:flex; gap:12px; align-items:flex-start; padding:12px 14px; border-radius:10px; margin-bottom:14px; font-size:12px; line-height:1.5; }
+.wc-phase-banner.claim { background:#eff6ff; border:1px solid #bfdbfe; color:#1e3a8a; }
+.wc-phase-banner.settle { background:#f5f3ff; border:1px solid #ddd6fe; color:#5b21b6; }
+.wc-phase-banner strong { display:block; font-size:13px; margin-bottom:2px; }
+.wc-phase-num { flex:0 0 28px; height:28px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; color:#fff; }
+.wc-phase-banner.claim .wc-phase-num { background:#2563eb; }
+.wc-phase-banner.settle .wc-phase-num { background:#7c3aed; }
+.wc-meta { display:flex; flex-wrap:wrap; gap:12px 18px; font-size:12px; color:#475569; margin-bottom:12px; }
 .wc-meta strong { color:#111827; }
-.wc-table-scroll { overflow:auto; max-height:360px; border:1px solid #e2e8f0; border-radius:10px; }
+.wc-table-scroll { overflow:auto; border:1px solid #e2e8f0; border-radius:10px; }
 .wc-tbl { width:100%; border-collapse:collapse; font-size:12px; }
-.wc-tbl thead th { position:sticky; top:0; z-index:2; background:#f1f5f9; padding:10px 12px; text-align:left; font-size:11px; text-transform:uppercase; border-bottom:2px solid #cbd5e1; white-space:nowrap; }
+.wc-tbl thead th { position:sticky; top:0; z-index:2; background:#f8fafc; padding:10px 12px; text-align:left; font-size:11px; text-transform:uppercase; border-bottom:1px solid #e2e8f0; }
 .wc-tbl tbody td { padding:10px 12px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
-.wc-tbl tbody tr.warn-row { background:#fff7ed; }
-.wc-tbl tbody tr.done-row { background:#f8fafc; color:#64748b; }
-.wc-tbl .num { text-align:right; font-variant-numeric:tabular-nums; }
-.wc-tbl input[type=number], .wc-tbl input[type=text] { width:100%; min-width:70px; padding:4px 8px; border:1px solid #d1d5db; border-radius:6px; font-size:12px; }
-.wc-grid-2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:14px; }
-.wc-form-row { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-bottom:10px; }
-.wc-sticky-actions { position:sticky; bottom:0; z-index:20; background:#fff; border-top:1px solid #e2e8f0; padding:12px 18px; display:flex; gap:8px; flex-wrap:wrap; box-shadow:0 -4px 12px rgba(0,0,0,.05); }
-.wc-empty { text-align:center; padding:40px 0; color:#9ca3af; }
-.wc-badge { display:inline-block; padding:3px 8px; border-radius:999px; font-size:11px; font-weight:600; background:#e2e8f0; color:#334155; }
-.wc-badge.draft { background:#e2e8f0; }
-.wc-badge.returned { background:#dbeafe; color:#1d4ed8; }
-.wc-badge.inspected { background:#fef3c7; color:#b45309; }
-.wc-badge.replaced { background:#ede9fe; color:#6d28d9; }
-.wc-badge.completed { background:#d1fae5; color:#047857; }
-.wc-history-item { border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; margin-bottom:8px; font-size:12px; }
-.wc-history-item a { font-weight:600; }
-.wc-alert { padding:10px 12px; border-radius:8px; background:#fff7ed; border:1px solid #fdba74; color:#9a3412; font-size:12px; margin-bottom:12px; }
-.wc-flow { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
-.wc-flow-step { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc; font-size:12px; color:#475569; }
-.wc-flow-step strong { color:#111827; display:block; margin-bottom:2px; }
-.wc-flow-num { flex:0 0 24px; height:24px; border-radius:999px; background:#2563eb; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
-.wc-item-card { border:1px solid #e2e8f0; border-radius:10px; padding:12px; margin-bottom:10px; background:#fff; }
-.wc-item-card.done { opacity:.7; background:#f8fafc; }
-.wc-item-card-head { font-weight:700; color:#111827; margin-bottom:8px; font-size:13px; }
+.wc-tbl .num { text-align:right; }
+.wc-tbl input { width:100%; min-width:64px; padding:8px 10px; border:1px solid #d1d5db; border-radius:8px; font-size:14px; }
+.wc-item-card { border:1px solid #e2e8f0; border-radius:12px; padding:14px; margin-bottom:10px; background:#fff; }
+.wc-item-card.done { opacity:.65; background:#f8fafc; }
+.wc-item-card-head { font-weight:700; color:#111827; margin-bottom:8px; }
 .wc-item-card-meta { display:flex; flex-wrap:wrap; gap:8px 14px; font-size:11px; color:#64748b; margin-bottom:10px; }
-.wc-item-card-meta span strong { color:#334155; }
-.wc-item-card-field { margin-bottom:8px; }
+.wc-item-card-field { margin-bottom:10px; }
 .wc-item-card-field label { display:block; font-size:10px; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:4px; }
-.wc-item-card-field input { width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:8px; font-size:14px; }
+.wc-item-card-field input { width:100%; padding:10px 12px; border:1px solid #d1d5db; border-radius:8px; font-size:15px; }
 .wc-mobile-items { display:none; }
 .wc-desktop-table { display:block; }
-.wc-step-note { font-size:11px; color:#64748b; margin:0 0 10px; line-height:1.5; }
-.wc-advanced { border:1px dashed #cbd5e1; border-radius:10px; padding:12px; }
-@media (max-width: 768px) {
-	.wc-wrap { padding:8px 0 90px; }
-	.wc-card { padding:14px; border-radius:10px; }
-	.wc-search-row, .wc-form-row { flex-direction:column; align-items:stretch; }
-	.wc-field { min-width:0; flex:1 1 auto; }
-	.wc-actions { width:100%; }
-	.wc-actions .btn { flex:1; min-height:40px; }
-	.wc-summary-row { gap:8px; }
-	.wc-scard { flex:1 1 calc(50% - 8px); min-width:calc(50% - 8px); }
-	.wc-meta { flex-direction:column; gap:6px; }
-	.wc-meta-extra { display:none; }
+.wc-form-row { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end; margin-bottom:12px; }
+.wc-step-note { font-size:12px; color:#64748b; margin:0 0 12px; line-height:1.5; }
+.wc-btn-main { width:100%; min-height:44px; font-size:14px; font-weight:600; border-radius:10px; }
+.wc-empty { text-align:center; padding:36px 16px; color:#94a3b8; font-size:13px; }
+.wc-badge { display:inline-block; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:600; background:#e2e8f0; }
+.wc-badge.returned { background:#dbeafe; color:#1d4ed8; }
+.wc-badge.replaced { background:#ede9fe; color:#6d28d9; }
+.wc-badge.completed { background:#d1fae5; color:#047857; }
+.wc-history-item { border:1px solid #e2e8f0; border-radius:10px; padding:10px 12px; margin-bottom:8px; font-size:12px; }
+.wc-alert { padding:10px 12px; border-radius:8px; background:#fff7ed; border:1px solid #fdba74; color:#9a3412; font-size:12px; margin-bottom:12px; }
+.wc-settle-empty { text-align:center; padding:28px 16px; color:#64748b; }
+@media (max-width:768px) {
+	.wc-wrap { padding:8px 8px 24px; }
+	.wc-search-row, .wc-form-row { flex-direction:column; }
+	.wc-field, .wc-actions, .wc-actions .btn { width:100%; }
+	.wc-actions .btn { min-height:42px; }
+	.wc-scard { flex:1 1 calc(50% - 8px); }
 	.wc-mobile-items { display:block; }
 	.wc-desktop-table { display:none; }
-	.wc-grid-2 { grid-template-columns:1fr; }
-	.wc-sticky-actions { padding:10px 12px; }
-	.wc-sticky-actions .btn { flex:1; min-height:40px; }
 	.wc-f-barcode { display:none; }
-	.wc-btn-return, .wc-btn-replacement { width:100%; min-height:42px; font-size:13px; }
+	.wc-tab { padding:10px 12px; font-size:12px; }
 }
 </style>`);
 	}
 
 	const $w = $(`
 		<div class="wc-wrap">
+			<div class="wc-hero">
+				<h2>${__("Warranty")}</h2>
+				<p>${__("Claim returned products first, then settle with inspection and replacement.")}</p>
+			</div>
+
 			<div class="wc-card">
-				<div class="wc-title">${__("Invoice Search")}</div>
+				<div class="wc-title">${__("Find Invoice")}</div>
 				<div class="wc-search-row">
 					<div class="wc-field wc-f-invoice"></div>
 					<div class="wc-field wc-f-barcode"></div>
 					<div class="wc-actions">
-						<button class="btn btn-primary btn-sm wc-btn-search">${__("Search Invoice")}</button>
-						<button class="btn btn-default btn-sm wc-btn-clear">${__("Clear")}</button>
+						<button class="btn btn-primary wc-btn-search">${__("Search")}</button>
+						<button class="btn btn-default wc-btn-clear">${__("Clear")}</button>
 					</div>
 				</div>
 			</div>
 
 			<div class="wc-summary-row wc-summary-panel" style="display:none;"></div>
+
+			<div class="wc-tabs wc-tab-switcher" style="display:none;">
+				<button type="button" class="wc-tab active" data-tab="claim">
+					${__("Claim")}
+					<span class="wc-tab-icon">${__("Receive product")}</span>
+				</button>
+				<button type="button" class="wc-tab" data-tab="settle">
+					${__("Settle")}
+					<span class="wc-tab-icon">${__("Transfer & replace")}</span>
+				</button>
+			</div>
+
 			<div class="wc-invoice-panel" style="display:none;">
-				<div class="wc-card wc-flow-card">
-					<div class="wc-title">${__("Warranty Flow")}</div>
-					<div class="wc-flow">
-						<div class="wc-flow-step">
-							<div class="wc-flow-num">1</div>
-							<div><strong>${__("Receive returned product")}</strong>${__("Enter claim qty and create a draft Sales Invoice Return. Submit the return only after the customer hands over the product.")}</div>
-						</div>
-						<div class="wc-flow-step">
-							<div class="wc-flow-num">2</div>
-							<div><strong>${__("Inspect & move stock")}</strong>${__("Optional. Transfer received items from incoming warehouse to damaged / sellable / repair warehouse.")}</div>
-						</div>
-						<div class="wc-flow-step">
-							<div class="wc-flow-num">3</div>
-							<div><strong>${__("Give replacement product")}</strong>${__("After the return invoice is submitted, enter replacement qty and create a Delivery Note to send the new product to the customer.")}</div>
+				<div class="wc-tab-panel wc-tab-claim active">
+					<div class="wc-phase-banner claim">
+						<div class="wc-phase-num">1</div>
+						<div>
+							<strong>${__("Claim — receive returned product")}</strong>
+							${__("Enter claim quantity and create a draft return. Submit the return invoice only after the customer hands over the product.")}
 						</div>
 					</div>
-				</div>
-
-				<div class="wc-card">
-					<div class="wc-title">${__("Invoice & Items")}</div>
-					<div class="wc-meta wc-invoice-meta"></div>
-					<div class="wc-alert wc-claim-alert" style="display:none;"></div>
-					<div class="wc-table-scroll">
-						<div class="wc-empty wc-items-loading"><i class="fa fa-spinner fa-spin"></i> ${__("Loading items...")}</div>
-					</div>
-				</div>
-
-				<div class="wc-grid-2">
-					<div class="wc-card">
-						<div class="wc-title">${__("Step 1 — Receive Product")}</div>
-						<p class="wc-step-note">${__("Creates a draft credit note (not submitted). Review and submit it in Sales Invoice when product is received.")}</p>
-						<div class="wc-form-row">
+					<div class="wc-card claim">
+						<div class="wc-meta wc-invoice-meta-claim"></div>
+						<div class="wc-alert wc-claim-alert" style="display:none;"></div>
+						<div class="wc-table-scroll wc-items-claim"></div>
+						<div class="wc-form-row" style="margin-top:14px;">
 							<div class="wc-field wc-f-receive-wh"></div>
 							<div class="wc-field wc-f-condition"></div>
 						</div>
-						<button class="btn btn-primary btn-sm wc-btn-return">${__("Create Draft Return")}</button>
+						<button class="btn btn-primary wc-btn-main wc-btn-return">${__("Create Draft Return")}</button>
 					</div>
+				</div>
 
-					<div class="wc-card">
-						<div class="wc-title">${__("Step 3 — Replacement Product")}</div>
-						<p class="wc-step-note">${__("Available only after the return invoice is submitted. Issues a Delivery Note to give new stock to the customer.")}</p>
-						<div class="wc-form-row">
-							<div class="wc-field wc-f-replacement-wh"></div>
+				<div class="wc-tab-panel wc-tab-settle">
+					<div class="wc-phase-banner settle">
+						<div class="wc-phase-num">2</div>
+						<div>
+							<strong>${__("Settle — inspect, move stock & replace")}</strong>
+							${__("After the return is submitted, transfer items to the right warehouse and issue replacement product to the customer.")}
 						</div>
-						<button class="btn btn-primary btn-sm wc-btn-replacement">${__("Issue Replacement")}</button>
 					</div>
-
-					<div class="wc-card wc-advanced">
-						<div class="wc-title">${__("Step 2 — Warehouse Transfer (Optional)")}</div>
-						<p class="wc-step-note">${__("Move inspected items between warranty warehouses.")}</p>
+					<div class="wc-card settle">
+						<div class="wc-meta wc-invoice-meta-settle"></div>
+						<div class="wc-alert wc-settle-alert" style="display:none;"></div>
+						<div class="wc-table-scroll wc-items-settle"></div>
+					</div>
+					<div class="wc-card settle">
+						<div class="wc-title">${__("Warehouse Transfer")}</div>
+						<p class="wc-step-note">${__("Move received items from incoming to damaged / sellable / repair warehouse.")}</p>
 						<div class="wc-form-row">
 							<div class="wc-field wc-f-source-wh"></div>
 							<div class="wc-field wc-f-target-wh"></div>
 						</div>
-						<button class="btn btn-default btn-sm wc-btn-transfer">${__("Create Stock Entry")}</button>
+						<button class="btn btn-default wc-btn-main wc-btn-transfer">${__("Create Stock Entry")}</button>
 					</div>
-
+					<div class="wc-card settle">
+						<div class="wc-title">${__("Issue Replacement")}</div>
+						<p class="wc-step-note">${__("Give new product to the customer from replacement warehouse.")}</p>
+						<div class="wc-form-row">
+							<div class="wc-field wc-f-replacement-wh"></div>
+						</div>
+						<button class="btn btn-primary wc-btn-main wc-btn-replacement">${__("Issue Replacement")}</button>
+					</div>
 					<div class="wc-card">
-						<div class="wc-title">${__("Claim History")}</div>
+						<div class="wc-title">${__("History")}</div>
 						<div class="wc-history-list"></div>
 					</div>
 				</div>
 			</div>
 
-			<div class="wc-sticky-actions wc-action-bar" style="display:none;">
-				<button class="btn btn-default btn-sm wc-btn-reload">${__("Refresh")}</button>
-				<span class="text-muted" style="font-size:12px; align-self:center;"></span>
+			<div class="wc-settle-only wc-settle-empty wc-card" style="display:none;">
+				<p>${__("Search an invoice above to start settling warranty claims.")}</p>
 			</div>
 		</div>
 	`);
@@ -177,24 +185,18 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 	page.main.append($w);
 
 	const controls = {};
-	const make_control = (parent, df) => {
-		const control = frappe.ui.form.make_control({
-			parent: $w.find(parent),
-			df,
-			render_input: true,
-		});
-		return control;
-	};
+	const make_control = (parent, df) =>
+		frappe.ui.form.make_control({ parent: $w.find(parent), df, render_input: true });
 
 	controls.invoice = make_control(".wc-f-invoice", {
 		fieldname: "invoice_no",
-		label: __("Sales Invoice Number"),
+		label: __("Sales Invoice"),
 		fieldtype: "Data",
 		placeholder: __("SINV-00001"),
 	});
 	controls.barcode = make_control(".wc-f-barcode", {
 		fieldname: "barcode",
-		label: __("Barcode / Serial Number"),
+		label: __("Barcode / Serial"),
 		fieldtype: "Data",
 		placeholder: __("Optional"),
 	});
@@ -214,13 +216,13 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 	});
 	controls.source_wh = make_control(".wc-f-source-wh", {
 		fieldname: "source_warehouse",
-		label: __("Source Warehouse"),
+		label: __("From Warehouse"),
 		fieldtype: "Link",
 		options: "Warehouse",
 	});
 	controls.target_wh = make_control(".wc-f-target-wh", {
 		fieldname: "target_warehouse",
-		label: __("Target Warehouse"),
+		label: __("To Warehouse"),
 		fieldtype: "Link",
 		options: "Warehouse",
 	});
@@ -233,6 +235,64 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 
 	const esc = (v) => frappe.utils.escape_html(String(v ?? ""));
 	const to_flt = (v) => flt(v);
+
+	const RowReader = {
+		scope(tab) {
+			return tab ? $w.find(`.wc-tab-${tab}`) : $w;
+		},
+		read_number(idx, selector, tab = null) {
+			let value = 0;
+			this.scope(tab).find(`.wc-item-row[data-idx="${idx}"]`).each(function () {
+				$(this).find(selector).each(function () {
+					value = Math.max(value, to_flt($(this).val()));
+				});
+			});
+			return value;
+		},
+		read_text(idx, selector, tab = null) {
+			let value = "";
+			this.scope(tab).find(`.wc-item-row[data-idx="${idx}"] ${selector}`).each(function () {
+				const val = $(this).val();
+				if (val) value = val;
+			});
+			return value;
+		},
+	};
+
+	const TabManager = {
+		init(ctx) {
+			state.context = ctx;
+			const { show_claim_tab, show_settle_tab, show_tab_switcher, default_tab } = ctx;
+
+			if (show_tab_switcher) {
+				$w.find(".wc-tab-switcher").show();
+				$w.find('.wc-tab[data-tab="claim"]').toggle(show_claim_tab);
+				$w.find('.wc-tab[data-tab="settle"]').toggle(show_settle_tab);
+			} else {
+				$w.find(".wc-tab-switcher").hide();
+			}
+
+			if (!show_claim_tab) {
+				$w.find(".wc-tab-claim").remove();
+			}
+			if (!show_settle_tab) {
+				$w.find(".wc-tab-settle").remove();
+			} else if (!show_claim_tab) {
+				$w.find(".wc-settle-only").show();
+			}
+
+			this.switch_to(default_tab || "claim");
+		},
+		switch_to(tab) {
+			if (tab === "claim" && !state.context.show_claim_tab) tab = "settle";
+			if (tab === "settle" && !state.context.show_settle_tab) tab = "claim";
+			state.active_tab = tab;
+			$w.find(".wc-tab").removeClass("active");
+			$w.find(`.wc-tab[data-tab="${tab}"]`).addClass("active");
+			$w.find(".wc-tab-panel").removeClass("active");
+			$w.find(`.wc-tab-${tab}`).addClass("active");
+		},
+	};
 
 	const InvoiceLoader = {
 		async load(search = {}) {
@@ -254,121 +314,126 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 			this.render(state.invoice);
 		},
 		render(data) {
-			$w.find(".wc-invoice-panel, .wc-summary-panel, .wc-action-bar").show();
+			$w.find(".wc-invoice-panel, .wc-summary-panel, .wc-settle-only").hide();
+			$w.find(".wc-invoice-panel").show();
 			this.render_summary(data.summary);
 			this.render_meta(data);
-			this.render_items(data.items);
+			this.render_claim_items(data.items);
+			this.render_settle_items(data.items);
+			this.render_settle_state(data);
 			HistoryLoader.render(data.history || []);
-			$w.find(".wc-action-bar span").text(
-				`${__("Session documents")}: ${state.session_docs.length}`
-			);
+
+			if (to_flt(data.summary?.claimed_qty) > 0 && state.context.show_settle_tab) {
+				TabManager.switch_to("settle");
+			}
 		},
 		render_summary(summary) {
 			const status = (summary?.status || "Draft").toLowerCase();
-			const cards = [
-				{ lbl: __("Status"), val: summary?.status || "Draft", cls: status },
-				{ lbl: __("Claimed"), val: to_flt(summary?.claimed_qty) },
-				{ lbl: __("Replaced"), val: to_flt(summary?.replaced_qty) },
-				{ lbl: __("Pending"), val: to_flt(summary?.pending_qty), accent: summary?.pending_qty > 0 },
-			];
-			$w.find(".wc-summary-panel").html(
-				cards.map((c) => `
-					<div class="wc-scard ${c.cls ? c.cls : ""} ${c.accent ? "warn" : ""}">
-						<div class="wc-scard-lbl">${esc(c.lbl)}</div>
-						<div class="wc-scard-val">${c.cls ? `<span class="wc-badge ${esc(c.cls)}">${esc(c.val)}</span>` : esc(c.val)}</div>
-					</div>`
-				).join("")
-			);
+			$w.find(".wc-summary-panel").show().html(`
+				<div class="wc-scard"><div class="wc-scard-lbl">${__("Status")}</div><div class="wc-scard-val"><span class="wc-badge ${esc(status)}">${esc(summary?.status || "Draft")}</span></div></div>
+				<div class="wc-scard"><div class="wc-scard-lbl">${__("Claimed")}</div><div class="wc-scard-val">${to_flt(summary?.claimed_qty)}</div></div>
+				<div class="wc-scard"><div class="wc-scard-lbl">${__("Replaced")}</div><div class="wc-scard-val">${to_flt(summary?.replaced_qty)}</div></div>
+				<div class="wc-scard"><div class="wc-scard-lbl">${__("Pending")}</div><div class="wc-scard-val">${to_flt(summary?.pending_qty)}</div></div>
+			`);
 		},
 		render_meta(data) {
-			$w.find(".wc-invoice-meta").html(`
+			const html = `
 				<div><strong>${__("Invoice")}:</strong> ${esc(data.sales_invoice)}</div>
 				<div><strong>${__("Customer")}:</strong> ${esc(data.customer_name || data.customer)}</div>
-				<div class="wc-meta-extra"><strong>${__("Date")}:</strong> ${esc(frappe.datetime.str_to_user(data.posting_date))}</div>
+				<div><strong>${__("Date")}:</strong> ${esc(frappe.datetime.str_to_user(data.posting_date))}</div>
+			`;
+			$w.find(".wc-invoice-meta-claim, .wc-invoice-meta-settle").html(html);
+		},
+		render_claim_items(items) {
+			const mobile = (items || []).map((row, idx) => this._claim_card(row, idx)).join("");
+			const desktop = (items || []).map((row, idx) => this._claim_row(row, idx)).join("");
+			$w.find(".wc-items-claim").html(`
+				<div class="wc-mobile-items">${mobile || `<div class="wc-empty">${__("No items")}</div>`}</div>
+				<div class="wc-desktop-table"><table class="wc-tbl"><thead><tr>
+					<th>${__("Item")}</th><th class="num">${__("Sold")}</th><th class="num">${__("Left")}</th>
+					<th class="num">${__("Claim Qty")}</th><th>${__("Serial")}</th>
+				</tr></thead><tbody>${desktop}</tbody></table></div>
 			`);
-			const fully_claimed = (data.items || []).every((row) => row.fully_claimed);
-			const $alert = $w.find(".wc-claim-alert");
-			if (fully_claimed) {
-				$alert.show().text(__("All items on this invoice are already fully claimed."));
+		},
+		_claim_card(row, idx) {
+			const disabled = row.fully_claimed ? "disabled" : "";
+			return `
+				<div class="wc-item-card wc-item-row ${row.fully_claimed ? "done" : ""}" data-idx="${idx}">
+					<div class="wc-item-card-head">${esc(row.item_name || row.item_code)}</div>
+					<div class="wc-item-card-meta">
+						<span>${__("Sold")}: <strong>${to_flt(row.sold_qty)}</strong></span>
+						<span>${__("Left")}: <strong>${to_flt(row.remaining_qty)}</strong></span>
+					</div>
+					<div class="wc-item-card-field"><label>${__("Claim Qty")}</label>
+						<input type="number" min="0" class="wc-claim-qty" value="0" ${disabled}></div>
+					${row.has_serial_no ? `<div class="wc-item-card-field"><label>${__("Serial")}</label><input type="text" class="wc-serial-no" value="${esc(row.serial_no)}" ${disabled}></div>` : `<input type="hidden" class="wc-serial-no" value="${esc(row.serial_no)}">`}
+					<input type="hidden" class="wc-batch-no" value="${esc(row.batch_no)}">
+				</div>`;
+		},
+		_claim_row(row, idx) {
+			const disabled = row.fully_claimed ? "disabled" : "";
+			return `<tr class="wc-item-row ${row.fully_claimed ? "done" : ""}" data-idx="${idx}">
+				<td>${esc(row.item_name || row.item_code)}</td>
+				<td class="num">${to_flt(row.sold_qty)}</td>
+				<td class="num">${to_flt(row.remaining_qty)}</td>
+				<td class="num"><input type="number" min="0" class="wc-claim-qty" value="0" ${disabled}></td>
+				<td>${row.has_serial_no ? `<input type="text" class="wc-serial-no" value="${esc(row.serial_no)}" ${disabled}>` : "—"}</td>
+			</tr>`;
+		},
+		render_settle_items(items) {
+			const mobile = (items || []).map((row, idx) => this._settle_card(row, idx)).join("");
+			const desktop = (items || []).map((row, idx) => this._settle_row(row, idx)).join("");
+			$w.find(".wc-items-settle").html(`
+				<div class="wc-mobile-items">${mobile || `<div class="wc-empty">${__("No items")}</div>`}</div>
+				<div class="wc-desktop-table"><table class="wc-tbl"><thead><tr>
+					<th>${__("Item")}</th><th class="num">${__("Claimed")}</th><th class="num">${__("Replaced")}</th>
+					<th class="num">${__("Replace Qty")}</th>
+				</tr></thead><tbody>${desktop}</tbody></table></div>
+			`);
+		},
+		_settle_card(row, idx) {
+			const can_replace = to_flt(row.claimed_qty) > 0;
+			return `
+				<div class="wc-item-card wc-item-row" data-idx="${idx}">
+					<div class="wc-item-card-head">${esc(row.item_name || row.item_code)}</div>
+					<div class="wc-item-card-meta">
+						<span>${__("Claimed")}: <strong>${to_flt(row.claimed_qty)}</strong></span>
+						<span>${__("Replaced")}: <strong>${to_flt(row.replaced_qty)}</strong></span>
+					</div>
+					<div class="wc-item-card-field"><label>${__("Replacement Qty")}</label>
+						<input type="number" min="0" class="wc-replacement-qty" value="0" ${can_replace ? "" : "disabled"}></div>
+					<input type="hidden" class="wc-transfer-qty" value="0">
+					<input type="hidden" class="wc-serial-no" value="${esc(row.serial_no)}">
+					<input type="hidden" class="wc-batch-no" value="${esc(row.batch_no)}">
+					<input type="hidden" class="wc-replacement-item-code" value="${esc(row.item_code)}">
+					<input type="hidden" class="wc-claim-qty" value="0">
+				</div>`;
+		},
+		_settle_row(row, idx) {
+			const can_replace = to_flt(row.claimed_qty) > 0;
+			return `<tr class="wc-item-row" data-idx="${idx}"
+				data-serial="${esc(row.serial_no)}" data-batch="${esc(row.batch_no)}" data-item="${esc(row.item_code)}">
+				<td>${esc(row.item_name || row.item_code)}</td>
+				<td class="num">${to_flt(row.claimed_qty)}</td>
+				<td class="num">${to_flt(row.replaced_qty)}</td>
+				<td class="num"><input type="number" min="0" class="wc-replacement-qty" value="0" ${can_replace ? "" : "disabled"}></td>
+			</tr>`;
+		},
+		render_settle_state(data) {
+			const claimed = to_flt(data.summary?.claimed_qty);
+			const $alert = $w.find(".wc-settle-alert");
+			if (claimed <= 0) {
+				$alert.show().text(__("No submitted return yet. Complete Claim first and submit the return invoice, then come back here to settle."));
 			} else {
 				$alert.hide();
 			}
-		},
-		render_items(items) {
-			const build_row_inputs = (row, idx) => {
-				const disabled = row.fully_claimed ? "disabled" : "";
-				const can_replace = to_flt(row.claimed_qty) > 0;
-				return {
-					claim_qty: `<input type="number" min="0" step="1" class="wc-claim-qty" value="${to_flt(row.claim_qty)}" ${disabled}>`,
-					serial_no: row.has_serial_no
-						? `<input type="text" class="wc-serial-no" value="${esc(row.serial_no)}" placeholder="${__("Serial No")}" ${disabled}>`
-						: "",
-					replacement_qty: `<input type="number" min="0" step="1" class="wc-replacement-qty" value="0" ${can_replace ? "" : "disabled"}>`,
-				};
-			};
-
-			const mobile_cards = (items || []).map((row, idx) => {
-				const inputs = build_row_inputs(row, idx);
-				const card_cls = row.fully_claimed ? "done" : "";
-				return `
-					<div class="wc-item-card wc-item-row ${card_cls}" data-idx="${idx}">
-						<div class="wc-item-card-head">${esc(row.item_name || row.item_code)}</div>
-						<div class="wc-item-card-meta">
-							<span>${__("Sold")}: <strong>${to_flt(row.sold_qty)}</strong></span>
-							<span>${__("Claimed")}: <strong>${to_flt(row.claimed_qty)}</strong></span>
-							<span>${__("Left")}: <strong>${to_flt(row.remaining_qty)}</strong></span>
-						</div>
-						<div class="wc-item-card-field">
-							<label>${__("Claim Qty")}</label>
-							${inputs.claim_qty}
-						</div>
-						${row.has_serial_no ? `<div class="wc-item-card-field"><label>${__("Serial No")}</label>${inputs.serial_no}</div>` : `<input type="hidden" class="wc-serial-no" value="${esc(row.serial_no)}">`}
-						<input type="hidden" class="wc-batch-no" value="${esc(row.batch_no)}">
-						<input type="hidden" class="wc-transfer-qty" value="0">
-						<div class="wc-item-card-field">
-							<label>${__("Replacement Qty")}</label>
-							${inputs.replacement_qty}
-						</div>
-						<input type="hidden" class="wc-replacement-item-code" value="${esc(row.item_code)}">
-					</div>`;
-			}).join("");
-
-			const desktop_rows = (items || []).map((row, idx) => {
-				const inputs = build_row_inputs(row, idx);
-				const row_cls = row.fully_claimed ? "done-row" : row.remaining_qty <= 0 ? "warn-row" : "";
-				return `
-					<tr class="wc-item-row ${row_cls}" data-idx="${idx}">
-						<td>${esc(row.item_code)}</td>
-						<td>${esc(row.item_name)}</td>
-						<td class="num">${to_flt(row.sold_qty)}</td>
-						<td class="num">${to_flt(row.claimed_qty)}</td>
-						<td class="num">${inputs.claim_qty}</td>
-						<td class="num">${to_flt(row.remaining_qty)}</td>
-						<td>${inputs.serial_no || "—"}</td>
-						<td class="num wc-replace-col">${inputs.replacement_qty}</td>
-					</tr>`;
-			}).join("");
-
-			$w.find(".wc-table-scroll").html(`
-				<div class="wc-mobile-items">${mobile_cards || `<div class="wc-empty">${__("No items found")}</div>`}</div>
-				<div class="wc-desktop-table">
-					<table class="wc-tbl">
-						<thead>
-							<tr>
-								<th>${__("Item")}</th>
-								<th>${__("Name")}</th>
-								<th class="num">${__("Sold")}</th>
-								<th class="num">${__("Claimed")}</th>
-								<th class="num">${__("Claim Qty")}</th>
-								<th class="num">${__("Left")}</th>
-								<th>${__("Serial")}</th>
-								<th class="num">${__("Replace Qty")}</th>
-							</tr>
-						</thead>
-						<tbody>${desktop_rows || `<tr><td colspan="8" class="wc-empty">${__("No items found")}</td></tr>`}</tbody>
-					</table>
-				</div>
-			`);
+			const fully_claimed = (data.items || []).every((r) => r.fully_claimed);
+			const $claim_alert = $w.find(".wc-claim-alert");
+			if (fully_claimed) {
+				$claim_alert.show().text(__("All items on this invoice are fully claimed."));
+			} else {
+				$claim_alert.hide();
+			}
 		},
 	};
 
@@ -376,15 +441,14 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		collect_claim_items() {
 			const items = [];
 			(state.invoice?.items || []).forEach((row, idx) => {
-				const $row = $w.find(`.wc-item-row[data-idx="${idx}"]`).first();
-				const claim_qty = to_flt($row.find(".wc-claim-qty").val());
+				const claim_qty = RowReader.read_number(idx, ".wc-claim-qty", "claim");
 				if (claim_qty <= 0) return;
 				items.push({
 					sales_invoice_item: row.sales_invoice_item,
 					item_code: row.item_code,
 					claim_qty,
-					serial_no: $row.find(".wc-serial-no").val(),
-					batch_no: $row.find(".wc-batch-no").val(),
+					serial_no: RowReader.read_text(idx, ".wc-serial-no", "claim"),
+					batch_no: RowReader.read_text(idx, ".wc-batch-no", "claim"),
 				});
 			});
 			return items;
@@ -392,19 +456,17 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		collect_transfer_items() {
 			const items = [];
 			(state.invoice?.items || []).forEach((row, idx) => {
-				const $row = $w.find(`.wc-item-row[data-idx="${idx}"]`).first();
-				let transfer_qty = to_flt($row.find(".wc-transfer-qty").val());
-				if (transfer_qty <= 0) {
-					transfer_qty = to_flt(row.claimed_qty);
-				}
+				let transfer_qty = RowReader.read_number(idx, ".wc-transfer-qty", "settle");
+				if (transfer_qty <= 0) transfer_qty = to_flt(row.claimed_qty);
 				if (transfer_qty <= 0) return;
+				const $row = $w.find(`.wc-tab-settle .wc-item-row[data-idx="${idx}"]`).first();
 				items.push({
 					sales_invoice_item: row.sales_invoice_item,
 					item_code: row.item_code,
 					uom: row.uom,
 					transfer_qty,
-					serial_no: $row.find(".wc-serial-no").val(),
-					batch_no: $row.find(".wc-batch-no").val(),
+					serial_no: RowReader.read_text(idx, ".wc-serial-no", "settle") || $row.data("serial") || row.serial_no,
+					batch_no: RowReader.read_text(idx, ".wc-batch-no", "settle") || $row.data("batch") || row.batch_no,
 				});
 			});
 			return items;
@@ -412,165 +474,124 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		collect_replacement_items() {
 			const items = [];
 			(state.invoice?.items || []).forEach((row, idx) => {
-				const $row = $w.find(`.wc-item-row[data-idx="${idx}"]`).first();
-				const replacement_qty = to_flt($row.find(".wc-replacement-qty").val());
+				const replacement_qty = RowReader.read_number(idx, ".wc-replacement-qty", "settle");
 				if (replacement_qty <= 0) return;
+				const $row = $w.find(`.wc-tab-settle .wc-item-row[data-idx="${idx}"]`).first();
 				items.push({
 					sales_invoice_item: row.sales_invoice_item,
 					item_code: row.item_code,
-					replacement_item_code: $row.find(".wc-replacement-item-code").val() || row.item_code,
+					replacement_item_code:
+						RowReader.read_text(idx, ".wc-replacement-item-code", "settle") || $row.data("item") || row.item_code,
 					replacement_qty,
 				});
 			});
 			return items;
 		},
 		validate_claim_items(items) {
-			if (!items.length) {
-				frappe.throw(__("Enter claim quantity for at least one item."));
-			}
-			items.forEach((row) => {
-				if (to_flt(row.claim_qty) <= 0) {
-					frappe.throw(__("Claim quantity cannot be zero."));
-				}
-			});
+			if (!items.length) frappe.throw(__("Enter claim quantity for at least one item."));
 		},
 	};
 
 	const SalesReturnGenerator = {
-		async create(submit = 0) {
+		async create() {
 			const items = ClaimValidator.collect_claim_items();
 			ClaimValidator.validate_claim_items(items);
-
 			const receive_warehouse = controls.receive_wh.get_value();
 			const product_condition = controls.condition.get_value();
 			if (!receive_warehouse) frappe.throw(__("Receive Warehouse is mandatory."));
 			if (!product_condition) frappe.throw(__("Product Condition is mandatory."));
 
-			await frappe.confirm(
-				__("Create draft Sales Invoice Return for {0} item(s)? It will NOT be submitted automatically.", [items.length]),
-				async () => {
-					const res = await frappe.call({
-						method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.create_warranty_return",
-						args: {
-							sales_invoice: state.invoice.sales_invoice,
-							items,
-							receive_warehouse,
-							product_condition,
-							submit,
-						},
-						freeze: true,
-						freeze_message: __("Creating draft return..."),
-					});
-					this._handle_result(res.message);
-				}
-			);
-		},
-		_handle_result(message) {
-			state.session_docs.push(message);
-			state.invoice = message.invoice;
-			InvoiceLoader.render(state.invoice);
-			frappe.msgprint({
-				title: __("Draft Return Created"),
-				indicator: "green",
-				message: __("Return {0} saved as draft. Submit it after the customer returns the product, then use Step 3 to issue replacement.", [
-					message.name,
-				]),
+			await frappe.confirm(__("Create draft return for {0} item(s)?", [items.length]), async () => {
+				const res = await frappe.call({
+					method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.create_warranty_return",
+					args: {
+						sales_invoice: state.invoice.sales_invoice,
+						items,
+						receive_warehouse,
+						product_condition,
+						submit: 0,
+					},
+					freeze: true,
+				});
+				state.invoice = res.message.invoice;
+				InvoiceLoader.render(state.invoice);
+				frappe.msgprint({
+					title: __("Draft Return Created"),
+					indicator: "green",
+					message: __("Return {0} saved. Submit it in Sales Invoice, then open the Settle tab.", [res.message.name]),
+				});
+				if (state.context.show_settle_tab) TabManager.switch_to("settle");
 			});
 		},
 	};
 
 	const StockTransferGenerator = {
-		async create(submit = 1) {
+		async create() {
 			const items = ClaimValidator.collect_transfer_items();
-			if (!items.length) frappe.throw(__("Enter transfer quantity for at least one item."));
-
+			if (!items.length) frappe.throw(__("No claimed items available to transfer."));
 			const source_warehouse = controls.source_wh.get_value();
 			const target_warehouse = controls.target_wh.get_value();
-			if (!source_warehouse || !target_warehouse) {
-				frappe.throw(__("Source and target warehouse are required."));
-			}
+			if (!source_warehouse || !target_warehouse) frappe.throw(__("Select source and target warehouse."));
 
-			await frappe.confirm(
-				__("Create Material Transfer Stock Entry?"),
-				async () => {
-					const res = await frappe.call({
-						method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.create_warranty_stock_transfer",
-						args: {
-							sales_invoice: state.invoice.sales_invoice,
-							items,
-							source_warehouse,
-							target_warehouse,
-							submit,
-						},
-						freeze: true,
-						freeze_message: __("Creating stock transfer..."),
-					});
-					state.session_docs.push(res.message);
-					state.invoice = res.message.invoice;
-					InvoiceLoader.render(state.invoice);
-					frappe.show_alert({
-						message: __("Stock Entry created: {0}", [res.message.name]),
-						indicator: "green",
-					});
-					frappe.set_route("Form", res.message.doctype, res.message.name);
-				}
-			);
+			await frappe.confirm(__("Create stock transfer?"), async () => {
+				const res = await frappe.call({
+					method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.create_warranty_stock_transfer",
+					args: {
+						sales_invoice: state.invoice.sales_invoice,
+						items,
+						source_warehouse,
+						target_warehouse,
+						submit: 0,
+					},
+					freeze: true,
+				});
+				state.invoice = res.message.invoice;
+				InvoiceLoader.render(state.invoice);
+				frappe.show_alert({ message: __("Stock Entry {0} created", [res.message.name]), indicator: "green" });
+			});
 		},
 	};
 
 	const DeliveryNoteGenerator = {
-		async create(submit = 1) {
+		async create() {
 			const items = ClaimValidator.collect_replacement_items();
-			if (!items.length) frappe.throw(__("Enter replacement quantity for at least one item."));
-
-			const has_claimed = (state.invoice?.items || []).some((row) => to_flt(row.claimed_qty) > 0);
-			if (!has_claimed) {
-				frappe.throw(__("Submit the draft return invoice first. Replacement is allowed only after the return is submitted."));
+			if (!items.length) frappe.throw(__("Enter replacement quantity."));
+			if (!(state.invoice?.items || []).some((r) => to_flt(r.claimed_qty) > 0)) {
+				frappe.throw(__("Submit the return invoice first before issuing replacement."));
 			}
-
 			const replacement_warehouse = controls.replacement_wh.get_value();
 			if (!replacement_warehouse) frappe.throw(__("Replacement Warehouse is mandatory."));
 
-			await frappe.confirm(
-				__("Issue replacement delivery note for {0} item(s)?", [items.length]),
-				async () => {
-					const res = await frappe.call({
-						method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.create_warranty_replacement",
-						args: {
-							sales_invoice: state.invoice.sales_invoice,
-							items,
-							replacement_warehouse,
-							submit,
-						},
-						freeze: true,
-						freeze_message: __("Creating delivery note..."),
-					});
-					state.session_docs.push(res.message);
-					state.invoice = res.message.invoice;
-					InvoiceLoader.render(state.invoice);
-					frappe.show_alert({
-						message: __("Delivery Note created: {0}", [res.message.name]),
-						indicator: "green",
-					});
-					frappe.set_route("Form", res.message.doctype, res.message.name);
-				}
-			);
+			await frappe.confirm(__("Issue replacement for {0} item(s)?", [items.length]), async () => {
+				const res = await frappe.call({
+					method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.create_warranty_replacement",
+					args: {
+						sales_invoice: state.invoice.sales_invoice,
+						items,
+						replacement_warehouse,
+						submit: 1,
+					},
+					freeze: true,
+				});
+				state.invoice = res.message.invoice;
+				InvoiceLoader.render(state.invoice);
+				frappe.show_alert({ message: __("Delivery Note {0} created", [res.message.name]), indicator: "green" });
+			});
 		},
 	};
 
 	const HistoryLoader = {
 		render(history) {
 			if (!history.length) {
-				$w.find(".wc-history-list").html(`<div class="wc-empty">${__("No warranty history yet.")}</div>`);
+				$w.find(".wc-history-list").html(`<div class="wc-empty">${__("No history yet.")}</div>`);
 				return;
 			}
 			$w.find(".wc-history-list").html(
 				history.map((row) => `
 					<div class="wc-history-item">
-						<div><a href="${frappe.utils.get_form_link(row.doctype, row.reference, true)}">${esc(row.reference)}</a>
-						<span class="text-muted"> · ${esc(row.type)} · ${esc(frappe.datetime.str_to_user(row.date))}</span></div>
-						<div>${__("Items")}: ${esc(row.items || "")}</div>
-						<div>${__("Qty")}: ${to_flt(row.qty)} · ${__("Status")}: ${esc(row.status)} ${row.detail ? `· ${esc(row.detail)}` : ""}</div>
+						<a href="${frappe.utils.get_form_link(row.doctype, row.reference, true)}">${esc(row.reference)}</a>
+						<span class="text-muted"> · ${esc(row.type)} · ${esc(frappe.datetime.str_to_user(row.date))}</span>
+						<div>${esc(row.items || "")} · ${__("Qty")}: ${to_flt(row.qty)}</div>
 					</div>`
 				).join("")
 			);
@@ -581,16 +602,19 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		const res = await frappe.call({
 			method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.get_warranty_context",
 		});
-		state.context = res.message || {};
-		if (state.context.default_receive_warehouse) {
-			controls.receive_wh.set_value(state.context.default_receive_warehouse);
-			controls.source_wh.set_value(state.context.default_receive_warehouse);
+		TabManager.init(res.message || {});
+		if (res.message?.default_receive_warehouse) {
+			controls.receive_wh.set_value(res.message.default_receive_warehouse);
+			controls.source_wh.set_value(res.message.default_receive_warehouse);
 		}
 	}
 
+	$w.on("click", ".wc-tab", function () {
+		TabManager.switch_to($(this).data("tab"));
+	});
+
 	controls.condition.$input.on("change", () => {
-		const condition = controls.condition.get_value();
-		const wh = state.context.condition_warehouses?.[condition];
+		const wh = state.context.condition_warehouses?.[controls.condition.get_value()];
 		if (wh) controls.target_wh.set_value(wh);
 	});
 
@@ -607,21 +631,19 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 
 	$w.find(".wc-btn-clear").on("click", () => {
 		state.invoice = null;
-		state.session_docs = [];
 		controls.invoice.set_value("");
 		controls.barcode.set_value("");
-		$w.find(".wc-invoice-panel, .wc-summary-panel, .wc-action-bar").hide();
+		$w.find(".wc-invoice-panel, .wc-summary-panel").hide();
+		if (!state.context.show_claim_tab && state.context.show_settle_tab) {
+			$w.find(".wc-settle-only").show();
+		}
 	});
 
-	$w.find(".wc-btn-return").on("click", () => SalesReturnGenerator.create(0));
-	$w.find(".wc-btn-transfer").on("click", () => StockTransferGenerator.create(0));
-	$w.find(".wc-btn-replacement").on("click", () => DeliveryNoteGenerator.create(1));
-	$w.find(".wc-btn-reload").on("click", () => InvoiceLoader.reload());
+	$w.find(".wc-btn-return").on("click", () => SalesReturnGenerator.create());
+	$w.find(".wc-btn-transfer").on("click", () => StockTransferGenerator.create());
+	$w.find(".wc-btn-replacement").on("click", () => DeliveryNoteGenerator.create());
 
 	controls.invoice.$input.on("keydown", (e) => {
-		if (e.key === "Enter") $w.find(".wc-btn-search").trigger("click");
-	});
-	controls.barcode.$input.on("keydown", (e) => {
 		if (e.key === "Enter") $w.find(".wc-btn-search").trigger("click");
 	});
 
