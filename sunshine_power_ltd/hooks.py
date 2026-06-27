@@ -147,6 +147,7 @@ doc_events = {
 	},
 	"Sales Invoice": {
 		"validate": [
+			"sunshine_power_ltd.permissions.validate_sales_invoice_allowed",
 			"sunshine_power_ltd.permissions.validate_sales_invoice_sales_user",
 			"sunshine_power_ltd.overrides.sync_sales_invoice_item_running_price",
 		],

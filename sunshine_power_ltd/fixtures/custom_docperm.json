@@ -1894,7 +1894,7 @@
   "role": "Salesman",
   "select": 1,
   "share": 0,
-  "submit": 0,
+  "submit": 1,
   "write": 1
  },
  {
@@ -1976,6 +1976,58 @@
   "write": 1
  },
  {
+  "amend": 1,
+  "cancel": 1,
+  "create": 1,
+  "delete": 1,
+  "docstatus": 0,
+  "doctype": "Custom DocPerm",
+  "email": 1,
+  "export": 1,
+  "if_owner": 0,
+  "impersonate": 0,
+  "import": 1,
+  "mask": 0,
+  "modified": "2026-06-27 00:00:00.000000",
+  "name": "spl_head_office_payment_entry",
+  "parent": "Payment Entry",
+  "permlevel": 0,
+  "print": 1,
+  "read": 1,
+  "report": 1,
+  "role": "Head Office",
+  "select": 0,
+  "share": 1,
+  "submit": 1,
+  "write": 1
+ },
+ {
+  "amend": 0,
+  "cancel": 0,
+  "create": 0,
+  "delete": 0,
+  "docstatus": 0,
+  "doctype": "Custom DocPerm",
+  "email": 0,
+  "export": 1,
+  "if_owner": 0,
+  "impersonate": 0,
+  "import": 0,
+  "mask": 0,
+  "modified": "2026-06-27 00:00:00.000000",
+  "name": "spl_head_office_sales_invoice",
+  "parent": "Sales Invoice",
+  "permlevel": 0,
+  "print": 1,
+  "read": 1,
+  "report": 1,
+  "role": "Head Office",
+  "select": 1,
+  "share": 0,
+  "submit": 0,
+  "write": 0
+ },
+ {
   "amend": 0,
   "cancel": 0,
   "create": 0,
@@ -2028,9 +2080,9 @@
   "write": 1
  },
  {
-  "amend": 1,
-  "cancel": 1,
-  "create": 1,
+  "amend": 0,
+  "cancel": 0,
+  "create": 0,
   "delete": 0,
   "docstatus": 0,
   "doctype": "Custom DocPerm",
@@ -2050,7 +2102,7 @@
   "role": "Accounts",
   "select": 0,
   "share": 1,
-  "submit": 1,
+  "submit": 0,
   "write": 1
  },
  {
@@ -3744,10 +3796,10 @@
   "write": 1
  },
  {
-  "amend": 1,
-  "cancel": 1,
-  "create": 1,
-  "delete": 1,
+  "amend": 0,
+  "cancel": 0,
+  "create": 0,
+  "delete": 0,
   "docstatus": 0,
   "doctype": "Custom DocPerm",
   "email": 1,
@@ -3766,7 +3818,7 @@
   "role": "Accounts Manager",
   "select": 0,
   "share": 1,
-  "submit": 1,
+  "submit": 0,
   "write": 1
  },
  {
@@ -5330,9 +5382,9 @@
   "write": 0
  },
  {
-  "amend": 1,
+  "amend": 0,
   "cancel": 0,
-  "create": 1,
+  "create": 0,
   "delete": 0,
   "docstatus": 0,
   "doctype": "Custom DocPerm",
@@ -5352,7 +5404,7 @@
   "role": "Accounts User",
   "select": 0,
   "share": 1,
-  "submit": 1,
+  "submit": 0,
   "write": 1
  },
  {

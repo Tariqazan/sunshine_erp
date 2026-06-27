@@ -1,19 +1,16 @@
 import frappe
 from frappe import _
 
-SALES_INVOICE_PRIVILEGED_ROLES = frozenset({
+SALES_INVOICE_ALLOWED_ROLES = frozenset({
 	"Administrator",
-	"System Manager",
 	"System Admin",
-	"Accounts",
-	"Head Office",
+	"Salesman",
 })
 
-SALES_INVOICE_SUBMIT_ROLES = frozenset({
+SALES_INVOICE_READ_ALL_ROLES = frozenset({
 	"Administrator",
-	"System Manager",
 	"System Admin",
-	"Accounts",
+	"Head Office",
 })
 
 JOURNAL_ENTRY_ADMIN_ROLES = frozenset({
@@ -51,24 +48,34 @@ PAYMENT_ENTRY_DRAFT_DENIED_PTYPES = frozenset({
 ACCOUNTING_RESTRICTED_PTYPES = JOURNAL_ENTRY_RESTRICTED_PTYPES
 
 
-def _is_privileged(user: str) -> bool:
-	if user == "Administrator":
-		return True
-	return bool(SALES_INVOICE_PRIVILEGED_ROLES.intersection(frappe.get_roles(user)))
-
-
-def can_submit_sales_invoice(user: str | None = None) -> bool:
+def can_read_all_sales_invoices(user: str | None = None) -> bool:
 	if not user:
 		user = frappe.session.user
 	if user == "Administrator":
 		return True
-	return bool(SALES_INVOICE_SUBMIT_ROLES.intersection(frappe.get_roles(user)))
+	return bool(SALES_INVOICE_READ_ALL_ROLES.intersection(frappe.get_roles(user)))
+
+
+def _is_sales_invoice_read_only(user: str) -> bool:
+	return "Head Office" in frappe.get_roles(user) and not can_create_sales_invoice(user)
+
+
+def can_create_sales_invoice(user: str | None = None) -> bool:
+	if not user:
+		user = frappe.session.user
+	if user == "Administrator":
+		return True
+	return bool(SALES_INVOICE_ALLOWED_ROLES.intersection(frappe.get_roles(user)))
+
+
+def can_submit_sales_invoice(user: str | None = None) -> bool:
+	return can_create_sales_invoice(user)
 
 
 def is_sales_invoice_restricted(user: str | None = None) -> bool:
 	if not user:
 		user = frappe.session.user
-	return not _is_privileged(user)
+	return not can_read_all_sales_invoices(user)
 
 
 def get_sales_invoice_permission_query_conditions(user: str | None = None) -> str:
@@ -94,8 +101,14 @@ def has_sales_invoice_permission(doc, ptype: str | None = None, user: str | None
 	if not user:
 		user = frappe.session.user
 
+	if ptype == "create" and not can_create_sales_invoice(user):
+		return False
+
 	if ptype == "submit" and not can_submit_sales_invoice(user):
 		return False
+
+	if _is_sales_invoice_read_only(user):
+		return ptype in ("read", "print", "report", "select", "email", "export")
 
 	if not is_sales_invoice_restricted(user):
 		return True
@@ -122,11 +135,20 @@ def has_sales_invoice_permission(doc, ptype: str | None = None, user: str | None
 def before_submit_sales_invoice(doc, method=None):
 	if not can_submit_sales_invoice():
 		frappe.throw(
-			_(
-				"Only System Manager, System Admin, Accounts, or Administrator can submit Sales Invoices."
-			),
+			_("Only Salesman, System Admin, or Administrator can submit Sales Invoices."),
 			frappe.PermissionError,
 		)
+
+
+def validate_sales_invoice_allowed(doc, method=None):
+	if frappe.flags.in_install or frappe.flags.in_patch or frappe.flags.in_migrate:
+		return
+	if can_create_sales_invoice():
+		return
+	frappe.throw(
+		_("Only Salesman, System Admin, or Administrator can create or save Sales Invoices."),
+		frappe.PermissionError,
+	)
 
 
 def can_manage_journal_entry(user: str | None = None) -> bool:
@@ -217,14 +239,17 @@ def has_payment_entry_permission(doc, ptype: str | None = None, user: str | None
 
 def _payment_entry_permission_error():
 	frappe.throw(
-		_("Only Accounts or System Admin can create, save, or submit Payment Entries."),
+		_("Only Accounts, Head Office, or System Admin can create, save, or submit Payment Entries."),
 		frappe.PermissionError,
 	)
 
 
 def _payment_entry_draft_only_error():
 	frappe.throw(
-		_("Sales users can only save Payment Entries as draft. Accounts or System Admin must submit."),
+		_(
+			"Sales users can only save Payment Entries as draft. "
+			"Accounts, Head Office, or System Admin must submit."
+		),
 		frappe.PermissionError,
 	)
 
