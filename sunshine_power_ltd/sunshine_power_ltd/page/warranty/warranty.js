@@ -576,6 +576,13 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		});
 		state.context = res.message || {};
 		TabManager.init(state.context);
+
+		const { show_claim_tab, show_settle_tab } = state.context;
+		if (show_claim_tab && !show_settle_tab) {
+			$w.find(".wc-hero p").text(__("Register how many items the customer is claiming."));
+		} else if (show_settle_tab && !show_claim_tab) {
+			$w.find(".wc-hero p").text(__("Complete receive, transfer, and replacement in one step."));
+		}
 	}
 
 	$w.on("click", ".wc-tab", function () {

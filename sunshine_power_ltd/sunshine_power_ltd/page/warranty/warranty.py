@@ -6,6 +6,58 @@ from frappe.utils import cint, flt, nowdate
 
 PRODUCT_CONDITIONS = ("Damaged", "Sellable", "Repairable")
 
+WARRANTY_CLAIM_ROLES = frozenset({"LPR"})
+WARRANTY_SETTLE_ROLES = frozenset({"Factory User"})
+
+
+def _user_roles(user=None):
+	if not user:
+		user = frappe.session.user
+	return set(frappe.get_roles(user))
+
+
+def _is_warranty_administrator(user=None):
+	if not user:
+		user = frappe.session.user
+	return user == "Administrator" or "Administrator" in _user_roles(user)
+
+
+def can_warranty_claim(user=None):
+	if _is_warranty_administrator(user):
+		return True
+	if _user_roles(user).intersection(WARRANTY_CLAIM_ROLES):
+		return True
+	return frappe.has_permission("Sales Invoice", "create", user=user or frappe.session.user)
+
+
+def can_warranty_settle(user=None):
+	if _is_warranty_administrator(user):
+		return True
+	if _user_roles(user).intersection(WARRANTY_SETTLE_ROLES):
+		return True
+	user = user or frappe.session.user
+	return (
+		frappe.has_permission("Sales Invoice", "submit", user=user)
+		or frappe.has_permission("Delivery Note", "create", user=user)
+		or frappe.has_permission("Stock Entry", "create", user=user)
+	)
+
+
+def _require_warranty_claim():
+	if not can_warranty_claim():
+		frappe.throw(_("You are not allowed to register warranty claims."), frappe.PermissionError)
+
+
+def _require_warranty_settle():
+	if not can_warranty_settle():
+		frappe.throw(_("You are not allowed to settle warranty claims."), frappe.PermissionError)
+
+
+def _require_warranty_read():
+	if can_warranty_claim() or can_warranty_settle():
+		return
+	frappe.has_permission("Sales Invoice", "read", throw=True)
+
 
 def _flt(value):
 	try:
@@ -36,15 +88,19 @@ def get_warranty_context():
 	roles = set(frappe.get_roles(user))
 	is_administrator = user == "Administrator" or "Administrator" in roles
 
-	can_claim = frappe.has_permission("Sales Invoice", "create", user=user)
-	can_settle = (
-		frappe.has_permission("Sales Invoice", "submit", user=user)
-		or frappe.has_permission("Delivery Note", "create", user=user)
-		or frappe.has_permission("Stock Entry", "create", user=user)
-	)
+	if is_administrator:
+		show_claim_tab = True
+		show_settle_tab = True
+	elif roles.intersection(WARRANTY_CLAIM_ROLES):
+		show_claim_tab = True
+		show_settle_tab = False
+	elif roles.intersection(WARRANTY_SETTLE_ROLES):
+		show_claim_tab = False
+		show_settle_tab = True
+	else:
+		show_claim_tab = can_warranty_claim(user)
+		show_settle_tab = can_warranty_settle(user)
 
-	show_claim_tab = is_administrator or can_claim
-	show_settle_tab = is_administrator or can_settle
 	show_tab_switcher = is_administrator or (show_claim_tab and show_settle_tab)
 
 	default_tab = "claim"
@@ -64,7 +120,7 @@ def get_warranty_context():
 @frappe.whitelist()
 def get_claim_queue(limit=40):
 	"""Claims registered by field team — qty only, awaiting settle team."""
-	frappe.has_permission("Sales Invoice", "read", throw=True)
+	_require_warranty_claim()
 	limit = min(cint(limit) or 40, 100)
 
 	warranty_filter = ""
@@ -123,7 +179,7 @@ def get_claim_queue(limit=40):
 @frappe.whitelist()
 def get_settle_queue(limit=40):
 	"""Draft claims awaiting receive/submit, and submitted claims pending replacement."""
-	frappe.has_permission("Sales Invoice", "read", throw=True)
+	_require_warranty_settle()
 	limit = min(cint(limit) or 40, 100)
 
 	warranty_filter = ""
@@ -279,7 +335,7 @@ def _resolve_sales_invoice(invoice_no=None, barcode=None):
 
 @frappe.whitelist()
 def load_sales_invoice(sales_invoice):
-	frappe.has_permission("Sales Invoice", "read", throw=True)
+	_require_warranty_read()
 
 	si = frappe.get_doc("Sales Invoice", sales_invoice)
 	if si.docstatus != 1:
@@ -360,7 +416,7 @@ def load_sales_invoice(sales_invoice):
 
 @frappe.whitelist()
 def get_claim_history(sales_invoice):
-	frappe.has_permission("Sales Invoice", "read", throw=True)
+	_require_warranty_read()
 
 	warranty_filter = ""
 	if _has_warranty_field("Sales Invoice", "custom_is_warranty_claim"):
@@ -684,7 +740,7 @@ def _validate_claim_items(sales_invoice, items):
 @frappe.whitelist()
 def create_warranty_return(sales_invoice, items, receive_warehouse=None, product_condition=None, submit=0):
 	"""Claim team registers qty only — draft return without stock movement."""
-	frappe.has_permission("Sales Invoice", "create", throw=True)
+	_require_warranty_claim()
 
 	items = _parse_json(items)
 	_validate_claim_items(sales_invoice, items)
@@ -744,7 +800,7 @@ def create_warranty_return(sales_invoice, items, receive_warehouse=None, product
 		frappe.throw(_("No return items could be created."))
 
 	return_doc.run_method("calculate_taxes_and_totals")
-	return_doc.insert()
+	return_doc.insert(ignore_permissions=bool(_user_roles().intersection(WARRANTY_CLAIM_ROLES)))
 
 	return {
 		"doctype": "Sales Invoice",
@@ -754,7 +810,7 @@ def create_warranty_return(sales_invoice, items, receive_warehouse=None, product
 	}
 
 
-def _submit_warranty_return_doc(return_doc, receive_warehouse, product_condition):
+def _submit_warranty_return_doc(return_doc, receive_warehouse, product_condition, ignore_permissions=False):
 	if product_condition not in PRODUCT_CONDITIONS:
 		frappe.throw(_("Select a valid product condition."))
 
@@ -769,8 +825,8 @@ def _submit_warranty_return_doc(return_doc, receive_warehouse, product_condition
 	for item in return_doc.items:
 		item.warehouse = receive_warehouse
 
-	return_doc.save()
-	return_doc.submit()
+	return_doc.save(ignore_permissions=ignore_permissions)
+	return_doc.submit(ignore_permissions=ignore_permissions)
 	return return_doc
 
 
@@ -802,7 +858,8 @@ def settle_warranty_claim(
 	items=None,
 ):
 	"""One step: submit return (if draft), transfer to condition warehouse, issue replacement."""
-	frappe.has_permission("Sales Invoice", "read", throw=True)
+	_require_warranty_settle()
+	ignore_permissions = bool(_user_roles().intersection(WARRANTY_SETTLE_ROLES))
 
 	items = _parse_json(items)
 	replacement_items = [row for row in items if _flt(row.get("replacement_qty")) > 0]
@@ -822,13 +879,14 @@ def settle_warranty_claim(
 			frappe.throw(_("No pending return found for this invoice."))
 		if not receive_warehouse:
 			frappe.throw(_("Receive Warehouse is mandatory."))
-		frappe.has_permission("Sales Invoice", "submit", throw=True)
 
 		return_doc = frappe.get_doc("Sales Invoice", return_invoice)
 		if return_doc.docstatus != 0:
 			frappe.throw(_("Return invoice is already submitted."))
 
-		_submit_warranty_return_doc(return_doc, receive_warehouse, product_condition)
+		_submit_warranty_return_doc(
+			return_doc, receive_warehouse, product_condition, ignore_permissions=ignore_permissions
+		)
 		if not target_warehouse:
 			frappe.throw(_("Select warehouse to move received item to."))
 
@@ -840,6 +898,7 @@ def settle_warranty_claim(
 				receive_warehouse,
 				target_warehouse,
 				submit=1,
+				ignore_permissions=ignore_permissions,
 			)
 	elif _flt(invoice_data["summary"].get("claimed_qty")) <= 0:
 		frappe.throw(_("No claim found for this invoice."))
@@ -849,13 +908,15 @@ def settle_warranty_claim(
 		replacement_items,
 		replacement_warehouse,
 		submit=1,
+		ignore_permissions=ignore_permissions,
 	)
 
 
 @frappe.whitelist()
 def submit_warranty_return(return_invoice, receive_warehouse=None, product_condition=None):
 	"""Settle team receives product — set warehouse, condition, and submit return."""
-	frappe.has_permission("Sales Invoice", "submit", throw=True)
+	_require_warranty_settle()
+	ignore_permissions = bool(_user_roles().intersection(WARRANTY_SETTLE_ROLES))
 
 	if not frappe.db.exists("Sales Invoice", return_invoice):
 		frappe.throw(_("Return invoice {0} not found.").format(return_invoice))
@@ -875,7 +936,9 @@ def submit_warranty_return(return_invoice, receive_warehouse=None, product_condi
 		if not cint(return_doc.custom_is_warranty_claim):
 			frappe.throw(_("This is not a warranty return invoice."))
 
-	_submit_warranty_return_doc(return_doc, receive_warehouse, product_condition)
+	_submit_warranty_return_doc(
+		return_doc, receive_warehouse, product_condition, ignore_permissions=ignore_permissions
+	)
 
 	sales_invoice = return_doc.return_against
 	return {
@@ -895,8 +958,10 @@ def create_warranty_stock_transfer(
 	source_warehouse,
 	target_warehouse,
 	submit=0,
+	ignore_permissions=False,
 ):
-	frappe.has_permission("Stock Entry", "create", throw=True)
+	if not ignore_permissions and not can_warranty_settle():
+		frappe.has_permission("Stock Entry", "create", throw=True)
 
 	items = _parse_json(items)
 	if not source_warehouse or not target_warehouse:
@@ -952,9 +1017,9 @@ def create_warranty_stock_transfer(
 	if not se.items:
 		frappe.throw(_("No stock transfer items could be created."))
 
-	se.insert()
+	se.insert(ignore_permissions=ignore_permissions)
 	if cint(submit):
-		se.submit()
+		se.submit(ignore_permissions=ignore_permissions)
 
 	return {
 		"doctype": "Stock Entry",
@@ -970,8 +1035,10 @@ def create_warranty_replacement(
 	items,
 	replacement_warehouse,
 	submit=0,
+	ignore_permissions=False,
 ):
-	frappe.has_permission("Delivery Note", "create", throw=True)
+	if not ignore_permissions and not can_warranty_settle():
+		frappe.has_permission("Delivery Note", "create", throw=True)
 
 	items = _parse_json(items)
 	if not replacement_warehouse:
@@ -1047,10 +1114,10 @@ def create_warranty_replacement(
 
 	dn.run_method("set_missing_values")
 	dn.run_method("calculate_taxes_and_totals")
-	dn.insert()
+	dn.insert(ignore_permissions=ignore_permissions)
 
 	if cint(submit):
-		dn.submit()
+		dn.submit(ignore_permissions=ignore_permissions)
 
 	return {
 		"doctype": "Delivery Note",

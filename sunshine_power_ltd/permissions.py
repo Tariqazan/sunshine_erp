@@ -11,6 +11,8 @@ SALES_INVOICE_READ_ALL_ROLES = frozenset({
 	"Administrator",
 	"System Admin",
 	"Head Office",
+	"LPR",
+	"Factory User",
 })
 
 JOURNAL_ENTRY_ADMIN_ROLES = frozenset({
@@ -57,7 +59,11 @@ def can_read_all_sales_invoices(user: str | None = None) -> bool:
 
 
 def _is_sales_invoice_read_only(user: str) -> bool:
-	return "Head Office" in frappe.get_roles(user) and not can_create_sales_invoice(user)
+	if can_create_sales_invoice(user):
+		return False
+	return bool(
+		{"Head Office", "LPR", "Factory User"}.intersection(frappe.get_roles(user))
+	)
 
 
 def can_create_sales_invoice(user: str | None = None) -> bool:
@@ -142,6 +148,8 @@ def before_submit_sales_invoice(doc, method=None):
 
 def validate_sales_invoice_allowed(doc, method=None):
 	if frappe.flags.in_install or frappe.flags.in_patch or frappe.flags.in_migrate:
+		return
+	if getattr(getattr(doc, "flags", None), "ignore_permissions", False):
 		return
 	if can_create_sales_invoice():
 		return
