@@ -726,5 +726,31 @@
   "restrict_to_domain": null,
   "role_name": "Head Office",
   "two_factor_auth": 0
+ },
+ {
+  "desk_access": 1,
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Role",
+  "home_page": null,
+  "is_custom": 1,
+  "modified": "2026-06-27 00:00:00.000000",
+  "name": "LPR",
+  "restrict_to_domain": null,
+  "role_name": "LPR",
+  "two_factor_auth": 0
+ },
+ {
+  "desk_access": 1,
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Role",
+  "home_page": null,
+  "is_custom": 1,
+  "modified": "2026-06-27 00:00:00.000000",
+  "name": "Factory User",
+  "restrict_to_domain": null,
+  "role_name": "Factory User",
+  "two_factor_auth": 0
  }
 ]
