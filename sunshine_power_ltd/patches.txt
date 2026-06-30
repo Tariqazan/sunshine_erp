@@ -5,3 +5,4 @@
 [post_model_sync]
 # Patches added in this section will be executed after doctypes are migrated
 sunshine_power_ltd.patches.create_warranty_custom_fields
+sunshine_power_ltd.patches.add_warranty_status_field

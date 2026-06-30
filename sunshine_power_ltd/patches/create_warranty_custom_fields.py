@@ -21,6 +21,15 @@ def execute():
 					"insert_after": "custom_is_warranty_claim",
 					"depends_on": "eval:doc.custom_is_warranty_claim==1",
 				},
+				{
+					"fieldname": "custom_warranty_status",
+					"label": "Warranty Status",
+					"fieldtype": "Select",
+					"options": "\nRequested\nReceived\nReady\nCompleted",
+					"insert_after": "custom_warranty_product_condition",
+					"depends_on": "eval:doc.custom_is_warranty_claim==1",
+					"read_only": 1,
+				},
 			],
 			"Delivery Note": [
 				{
