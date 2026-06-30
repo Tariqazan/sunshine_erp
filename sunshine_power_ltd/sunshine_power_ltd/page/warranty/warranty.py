@@ -825,8 +825,9 @@ def _submit_warranty_return_doc(return_doc, receive_warehouse, product_condition
 	for item in return_doc.items:
 		item.warehouse = receive_warehouse
 
-	return_doc.save(ignore_permissions=ignore_permissions)
-	return_doc.submit(ignore_permissions=ignore_permissions)
+	return_doc.flags.ignore_permissions = ignore_permissions
+	return_doc.save()
+	return_doc.submit()
 	return return_doc
 
 
@@ -1017,9 +1018,10 @@ def create_warranty_stock_transfer(
 	if not se.items:
 		frappe.throw(_("No stock transfer items could be created."))
 
+	se.flags.ignore_permissions = ignore_permissions
 	se.insert(ignore_permissions=ignore_permissions)
 	if cint(submit):
-		se.submit(ignore_permissions=ignore_permissions)
+		se.submit()
 
 	return {
 		"doctype": "Stock Entry",
@@ -1114,10 +1116,11 @@ def create_warranty_replacement(
 
 	dn.run_method("set_missing_values")
 	dn.run_method("calculate_taxes_and_totals")
+	dn.flags.ignore_permissions = ignore_permissions
 	dn.insert(ignore_permissions=ignore_permissions)
 
 	if cint(submit):
-		dn.submit(ignore_permissions=ignore_permissions)
+		dn.submit()
 
 	return {
 		"doctype": "Delivery Note",
