@@ -4,6 +4,48 @@ import frappe
 def get_context(context):
     context.no_cache = 1
     context.show_sidebar = False
+    # Full-bleed landing page — no Frappe container / breadcrumbs
+    context.full_width = 1
+    context.no_breadcrumbs = 1
+
+    # ── Brand theme from Frappe Whitelabel "Sidebar Configuration" ──
+    # Pull logo + brand colors from the active configuration record so
+    # the landing page always matches the app's whitelabel branding.
+    theme = {
+        "logo":             "",
+        "primary_color":    "#6366f1",
+        "secondary_color":  "#64748b",
+        "background_light": "#f8fafc",
+        "background_dark":  "#0b0f19",
+    }
+    try:
+        if frappe.db.exists("DocType", "Sidebar Configuration"):
+            cfg = frappe.db.get_value(
+                "Sidebar Configuration",
+                {"active": 1},
+                ["logo", "primary_color", "secondary_color",
+                 "background_light", "background_dark"],
+                as_dict=True,
+            )
+            # Fall back to most recent config if none flagged active
+            if not cfg:
+                cfg = frappe.db.get_value(
+                    "Sidebar Configuration",
+                    {},
+                    ["logo", "primary_color", "secondary_color",
+                     "background_light", "background_dark"],
+                    order_by="modified desc",
+                    as_dict=True,
+                )
+            if cfg:
+                for key in theme:
+                    if cfg.get(key):
+                        theme[key] = cfg.get(key)
+    except Exception:
+        # Whitelabel app not installed / table missing — keep defaults
+        pass
+
+    context.theme = theme
 
     # ── Company info ──────────────────────────────────────────────
     context.company = {
