@@ -7,6 +7,11 @@ SALES_INVOICE_ALLOWED_ROLES = frozenset({
 	"Salesman",
 })
 
+# Factory User may submit return invoices (warranty claims) only — not regular invoices.
+SALES_INVOICE_RETURN_SUBMIT_ROLES = frozenset({
+	"Factory User",
+})
+
 SALES_INVOICE_READ_ALL_ROLES = frozenset({
 	"Administrator",
 	"System Admin",
@@ -74,8 +79,16 @@ def can_create_sales_invoice(user: str | None = None) -> bool:
 	return bool(SALES_INVOICE_ALLOWED_ROLES.intersection(frappe.get_roles(user)))
 
 
-def can_submit_sales_invoice(user: str | None = None) -> bool:
-	return can_create_sales_invoice(user)
+def can_submit_sales_invoice(user: str | None = None, doc=None) -> bool:
+	if can_create_sales_invoice(user):
+		return True
+	# Factory User may submit return invoices only
+	if doc and doc.get("is_return"):
+		if not user:
+			user = frappe.session.user
+		if SALES_INVOICE_RETURN_SUBMIT_ROLES.intersection(frappe.get_roles(user)):
+			return True
+	return False
 
 
 def is_sales_invoice_restricted(user: str | None = None) -> bool:
@@ -110,7 +123,7 @@ def has_sales_invoice_permission(doc, ptype: str | None = None, user: str | None
 	if ptype == "create" and not can_create_sales_invoice(user):
 		return False
 
-	if ptype == "submit" and not can_submit_sales_invoice(user):
+	if ptype == "submit" and not can_submit_sales_invoice(user, doc):
 		return False
 
 	if _is_sales_invoice_read_only(user):
@@ -139,11 +152,19 @@ def has_sales_invoice_permission(doc, ptype: str | None = None, user: str | None
 
 
 def before_submit_sales_invoice(doc, method=None):
-	if not can_submit_sales_invoice():
+	if getattr(getattr(doc, "flags", None), "ignore_permissions", False):
+		return
+	if can_submit_sales_invoice(doc=doc):
+		return
+	if doc.get("is_return"):
 		frappe.throw(
-			_("Only Salesman, System Admin, or Administrator can submit Sales Invoices."),
+			_("Only Salesman, System Admin, Administrator, or Factory User can submit Sales Invoice returns."),
 			frappe.PermissionError,
 		)
+	frappe.throw(
+		_("Only Salesman, System Admin, or Administrator can submit Sales Invoices."),
+		frappe.PermissionError,
+	)
 
 
 def validate_sales_invoice_allowed(doc, method=None):
