@@ -5,6 +5,7 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		single_column: true,
 	});
 
+	const M = "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty";
 	const state = { invoice: null, context: {}, active_tab: "claim" };
 
 	if (!document.getElementById("wc-style")) {
@@ -67,8 +68,9 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 .wc-list-main span { font-size:11px; color:#64748b; }
 .wc-empty { text-align:center; padding:28px 14px; color:#94a3b8; font-size:13px; }
 .wc-flow-steps { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
-.wc-flow-step { flex:1; min-width:80px; text-align:center; padding:8px 6px; border-radius:8px; background:#f1f5f9; font-size:10px; font-weight:600; color:#94a3b8; }
+.wc-flow-step { flex:1; min-width:70px; text-align:center; padding:8px 6px; border-radius:8px; background:#f1f5f9; font-size:10px; font-weight:600; color:#94a3b8; }
 .wc-flow-step.on { background:#ede9fe; color:#6d28d9; }
+.wc-flow-step.done { background:#d1fae5; color:#047857; }
 @media (max-width:600px) {
 	.wc-wrap { padding:6px 10px 28px; }
 	.wc-form-grid { grid-template-columns:1fr; }
@@ -82,17 +84,17 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		<div class="wc-wrap">
 			<div class="wc-hero">
 				<h2>${__("Warranty")}</h2>
-				<p>${__("Field team registers claim qty. Office team completes everything in one step.")}</p>
+				<p>${__("Field team raises and hands over claims. Factory receives and prepares replacements.")}</p>
 			</div>
 
 			<div class="wc-tabs wc-tab-switcher" style="display:none;">
 				<button type="button" class="wc-tab active" data-tab="claim">
 					${__("Claim")}
-					<span class="wc-tab-sub">${__("Register qty")}</span>
+					<span class="wc-tab-sub">${__("Request & hand over")}</span>
 				</button>
 				<button type="button" class="wc-tab" data-tab="settle">
-					${__("Settle")}
-					<span class="wc-tab-sub">${__("Complete")}</span>
+					${__("Factory")}
+					<span class="wc-tab-sub">${__("Receive & prepare")}</span>
 				</button>
 			</div>
 
@@ -114,9 +116,20 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 						</div>
 						<div class="wc-pills wc-claim-pills"></div>
 					</div>
+
+					<div class="wc-flow-steps wc-claim-flow" style="display:none;">
+						<div class="wc-flow-step" data-step="1">${__("Request")}</div>
+						<div class="wc-flow-step" data-step="2">${__("Receive")}</div>
+						<div class="wc-flow-step" data-step="3">${__("Prepare")}</div>
+						<div class="wc-flow-step" data-step="4">${__("Hand over")}</div>
+					</div>
+
+					<div class="wc-hint-box wc-claim-hint" style="display:none;"></div>
 					<div class="wc-item-list wc-items-claim"></div>
-					<button class="btn btn-primary wc-btn-main wc-btn-return">${__("Register Claim")}</button>
-					<p class="wc-hint" style="margin-top:10px;margin-bottom:0;">${__("Only enter how many items the customer is claiming. Office will handle the rest.")}</p>
+
+					<button class="btn btn-primary wc-btn-main wc-btn-register">${__("Register Claim")}</button>
+					<button class="btn btn-primary wc-btn-main wc-btn-handover" style="display:none;">${__("Confirm Customer Received")}</button>
+					<p class="wc-hint wc-claim-foot" style="margin-top:10px;margin-bottom:0;">${__("Enter how many items the customer is claiming. Factory will handle the rest.")}</p>
 				</div>
 
 				<div class="wc-list-section">
@@ -130,7 +143,7 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 
 			<div class="wc-tab-panel wc-tab-settle">
 				<div class="wc-search-box">
-					<label class="wc-label">${__("Find invoice to settle")}</label>
+					<label class="wc-label">${__("Find invoice to process")}</label>
 					<div class="wc-search-row">
 						<div class="wc-field wc-f-invoice-settle"></div>
 						<button class="btn btn-primary wc-btn-search wc-btn-search-settle">${__("Search")}</button>
@@ -147,31 +160,37 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 					</div>
 
 					<div class="wc-flow-steps wc-settle-flow" style="display:none;">
-						<div class="wc-flow-step">${__("Receive")}</div>
-						<div class="wc-flow-step">${__("Transfer")}</div>
-						<div class="wc-flow-step">${__("Replace")}</div>
+						<div class="wc-flow-step" data-step="1">${__("Request")}</div>
+						<div class="wc-flow-step" data-step="2">${__("Receive")}</div>
+						<div class="wc-flow-step" data-step="3">${__("Prepare")}</div>
+						<div class="wc-flow-step" data-step="4">${__("Hand over")}</div>
 					</div>
 
 					<div class="wc-hint-box wc-settle-hint"></div>
 
-					<div class="wc-settle-fields">
+					<div class="wc-settle-receive-fields" style="display:none;">
 						<div class="wc-form-grid">
-							<div class="wc-field wc-f-receive-wh wc-settle-wh-receive"></div>
-							<div class="wc-field wc-f-condition wc-settle-wh-condition"></div>
-							<div class="wc-field wc-f-target-wh wc-settle-wh-target"></div>
-							<div class="wc-field wc-f-replacement-wh wc-settle-wh-replace"></div>
+							<div class="wc-field wc-f-condition"></div>
+							<div class="wc-field wc-f-condition-wh"></div>
+						</div>
+					</div>
+
+					<div class="wc-settle-prepare-fields" style="display:none;">
+						<div class="wc-form-grid">
+							<div class="wc-field wc-f-replacement-wh"></div>
 						</div>
 					</div>
 
 					<div class="wc-item-list wc-items-settle"></div>
 
-					<button class="btn btn-primary wc-btn-main wc-btn-settle-complete">${__("Complete Settlement")}</button>
-					<p class="wc-hint" style="margin-top:10px;margin-bottom:0;">${__("One click: receive stock, move to correct warehouse, and give replacement to customer.")}</p>
+					<button class="btn btn-primary wc-btn-main wc-btn-receive" style="display:none;">${__("Confirm Receipt")}</button>
+					<button class="btn btn-primary wc-btn-main wc-btn-prepare" style="display:none;">${__("Prepare Replacement")}</button>
+					<p class="wc-hint wc-settle-foot" style="margin-top:10px;margin-bottom:0;"></p>
 				</div>
 
 				<div class="wc-list-section">
 					<div class="wc-list-head">
-						<span class="wc-list-title">${__("Waiting to settle")}</span>
+						<span class="wc-list-title">${__("Waiting for factory")}</span>
 						<span class="wc-list-count wc-settle-queue-count"></span>
 					</div>
 					<div class="wc-list wc-settle-queue"><div class="wc-empty">${__("Loading...")}</div></div>
@@ -204,13 +223,6 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		fieldtype: "Data",
 		placeholder: __("e.g. SINV-00001"),
 	});
-	controls.receive_wh = make_control(".wc-f-receive-wh", {
-		fieldname: "receive_warehouse",
-		label: __("Receive warehouse"),
-		fieldtype: "Link",
-		options: "Warehouse",
-		reqd: 1,
-	});
 	controls.condition = make_control(".wc-f-condition", {
 		fieldname: "product_condition",
 		label: __("Product condition"),
@@ -218,9 +230,9 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		options: "\nDamaged\nSellable\nRepairable",
 		reqd: 1,
 	});
-	controls.target_wh = make_control(".wc-f-target-wh", {
-		fieldname: "target_warehouse",
-		label: __("Move to warehouse"),
+	controls.condition_wh = make_control(".wc-f-condition-wh", {
+		fieldname: "condition_warehouse",
+		label: __("Receive into warehouse"),
 		fieldtype: "Link",
 		options: "Warehouse",
 		reqd: 1,
@@ -236,14 +248,13 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 	const WarehouseHelper = {
 		bind_company(company) {
 			const filters = company ? { company, is_group: 0 } : { is_group: 0 };
-			["receive_wh", "target_wh", "replacement_wh"].forEach((key) => {
+			["condition_wh", "replacement_wh"].forEach((key) => {
 				controls[key].get_query = () => ({ filters });
 			});
 		},
-		show_fields(mode) {
-			const is_full = mode === "full";
-			$w.find(".wc-settle-wh-receive, .wc-settle-wh-condition, .wc-settle-wh-target").toggle(is_full);
-			$w.find(".wc-settle-fields").show();
+		default_warehouse(data) {
+			const item = (data.items || []).find((row) => row.warehouse);
+			return item ? item.warehouse : null;
 		},
 	};
 
@@ -269,6 +280,21 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 				if (val) value = val;
 			});
 			return value;
+		},
+	};
+
+	const FlowSteps = {
+		// active = the step the claim is waiting on (1..4); steps before it are done.
+		render($flow, active) {
+			$flow.show().find(".wc-flow-step").each(function () {
+				const step = parseInt($(this).data("step"), 10);
+				$(this).removeClass("on done");
+				if (step < active) $(this).addClass("done");
+				else if (step === active) $(this).addClass("on");
+			});
+		},
+		step_for(status) {
+			return { Requested: 2, Received: 3, Ready: 4, Completed: 4 }[status] || 1;
 		},
 	};
 
@@ -302,58 +328,42 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		async load_claim_queue() {
 			if (!state.context.show_claim_tab) return;
 			try {
-				const res = await frappe.call({
-					method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.get_claim_queue",
-				});
-				this.render_claim_queue(res.message || {});
+				const res = await frappe.call({ method: `${M}.get_claim_queue` });
+				this.render_queue(res.message || {}, "claim");
 			} catch (e) {
 				console.error(e);
 			}
-		},
-		render_claim_queue(data) {
-			const rows = data.rows || [];
-			$w.find(".wc-claim-queue-count").text(rows.length ? `${rows.length}` : "");
-			if (!rows.length) {
-				$w.find(".wc-claim-queue").html(`<div class="wc-empty">${__("No claims yet")}</div>`);
-				return;
-			}
-			$w.find(".wc-claim-queue").html(rows.map((row) => `
-				<div class="wc-list-item ${state.invoice?.sales_invoice === row.sales_invoice ? "selected" : ""}"
-					data-sales-invoice="${esc(row.sales_invoice)}">
-					<div class="wc-list-main">
-						<strong>${esc(row.sales_invoice)}</strong>
-						<span>${esc(row.customer_name || row.customer)} · ${__("Qty")} ${to_flt(row.claimed_qty)}</span>
-					</div>
-					<span class="wc-pill ${row.status_key === "registered" ? "amber" : "green"}">${esc(row.status)}</span>
-				</div>
-			`).join(""));
 		},
 		async load_settle_queue() {
 			if (!state.context.show_settle_tab) return;
 			try {
-				const res = await frappe.call({
-					method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.get_settle_queue",
-				});
-				this.render_settle_queue(res.message || {});
+				const res = await frappe.call({ method: `${M}.get_settle_queue` });
+				this.render_queue(res.message || {}, "settle");
 			} catch (e) {
 				console.error(e);
 			}
 		},
-		render_settle_queue(data) {
+		render_queue(data, tab) {
 			const rows = data.rows || [];
-			$w.find(".wc-settle-queue-count").text(rows.length ? `${rows.length}` : "");
+			const empty = tab === "claim" ? __("No claims yet") : __("Nothing waiting");
+			$w.find(`.wc-${tab}-queue-count`).text(rows.length ? `${rows.length}` : "");
 			if (!rows.length) {
-				$w.find(".wc-settle-queue").html(`<div class="wc-empty">${__("Nothing waiting")}</div>`);
+				$w.find(`.wc-${tab}-queue`).html(`<div class="wc-empty">${empty}</div>`);
 				return;
 			}
-			$w.find(".wc-settle-queue").html(rows.map((row) => `
-				<div class="wc-list-item settle ${state.invoice?.sales_invoice === row.sales_invoice ? "selected" : ""}"
+			const pill_class = (key) => {
+				if (key === "ready" || key === "prepare") return "purple";
+				if (key === "completed") return "green";
+				return "amber";
+			};
+			$w.find(`.wc-${tab}-queue`).html(rows.map((row) => `
+				<div class="wc-list-item ${tab === "settle" ? "settle " : ""}${state.invoice?.sales_invoice === row.sales_invoice ? "selected" : ""}"
 					data-sales-invoice="${esc(row.sales_invoice)}">
 					<div class="wc-list-main">
 						<strong>${esc(row.sales_invoice)}</strong>
 						<span>${esc(row.customer_name || row.customer)} · ${__("Qty")} ${to_flt(row.claimed_qty)}</span>
 					</div>
-					<span class="wc-pill ${row.status_key === "awaiting_receive" ? "amber" : "purple"}">${esc(row.status)}</span>
+					<span class="wc-pill ${pill_class(row.status_key)}">${esc(row.status)}</span>
 				</div>
 			`).join(""));
 		},
@@ -361,19 +371,13 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 
 	const InvoiceLoader = {
 		async load(search = {}, mode = "claim") {
-			const res = await frappe.call({
-				method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.search_sales_invoice",
-				args: search,
-			});
+			const res = await frappe.call({ method: `${M}.search_sales_invoice`, args: search });
 			state.invoice = res.message;
 			this.render(state.invoice, mode);
 			return state.invoice;
 		},
-		async load_by_name(sales_invoice, mode = "settle") {
-			const res = await frappe.call({
-				method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.load_sales_invoice",
-				args: { sales_invoice },
-			});
+		async load_by_name(sales_invoice, mode = "claim") {
+			const res = await frappe.call({ method: `${M}.load_sales_invoice`, args: { sales_invoice } });
 			state.invoice = res.message;
 			this.render(state.invoice, mode);
 			if (mode === "settle") controls.invoice_settle.set_value(sales_invoice);
@@ -386,17 +390,76 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 			QueueLoader.load_claim_queue();
 			QueueLoader.load_settle_queue();
 		},
-		render_claim(data) {
-			$w.find(".wc-claim-result").addClass("show");
-			$w.find(".wc-claim-invoice-title").text(data.sales_invoice);
-			$w.find(".wc-claim-invoice-sub").text(
+		render_head(prefix, data) {
+			$w.find(`.wc-${prefix}-result`).addClass("show");
+			$w.find(`.wc-${prefix}-invoice-title`).text(data.sales_invoice);
+			$w.find(`.wc-${prefix}-invoice-sub`).text(
 				`${data.customer_name || data.customer} · ${frappe.datetime.str_to_user(data.posting_date)}`
 			);
+		},
+		status_pill(status) {
+			const cls = { Requested: "amber", Received: "blue", Ready: "purple", Completed: "green" }[status] || "";
+			return status ? `<span class="wc-pill ${cls}">${esc(status)}</span>` : "";
+		},
+
+		render_claim(data) {
+			this.render_head("claim", data);
+			const status = data.claim_status || "";
 			const s = data.summary || {};
+
 			$w.find(".wc-claim-pills").html(`
-				<span class="wc-pill blue">${__("Left to claim")}: ${to_flt(s.pending_qty)}</span>
-				${to_flt(s.registered_qty) ? `<span class="wc-pill amber">${__("Registered")}: ${to_flt(s.registered_qty)}</span>` : ""}
+				${this.status_pill(status)}
+				${to_flt(s.pending_qty) ? `<span class="wc-pill blue">${__("Left to claim")}: ${to_flt(s.pending_qty)}</span>` : ""}
 			`);
+
+			const $flow = $w.find(".wc-claim-flow");
+			const $hint = $w.find(".wc-claim-hint");
+			const $btnRegister = $w.find(".wc-btn-register");
+			const $btnHandover = $w.find(".wc-btn-handover");
+			const $foot = $w.find(".wc-claim-foot");
+			$btnRegister.hide();
+			$btnHandover.hide();
+			$hint.hide();
+
+			if (status === "Ready") {
+				// Step 4 — salesman hands the replacement to the customer.
+				FlowSteps.render($flow, 4);
+				$hint.show().text(__("Factory has prepared the replacement. Confirm the customer has received it."));
+				$w.find(".wc-items-claim").html((data.items || []).map((row, idx) => {
+					if (to_flt(row.prepared_qty) <= 0) return "";
+					return `<div class="wc-item wc-item-row" data-idx="${idx}">
+						<div class="wc-item-name">${esc(row.item_name || row.item_code)}</div>
+						<div class="wc-item-stats">
+							<span>${__("Replacement ready")}: <strong>${to_flt(row.prepared_qty)}</strong></span>
+						</div>
+					</div>`;
+				}).filter(Boolean).join("") || `<div class="wc-empty">${__("Nothing to hand over")}</div>`);
+				$btnHandover.show();
+				$foot.text(__("Tapping confirm submits the replacement delivery note."));
+				return;
+			}
+
+			if (status === "Requested" || status === "Received") {
+				// Claim is open and with the factory — read-only for the salesman.
+				FlowSteps.render($flow, FlowSteps.step_for(status));
+				$hint.show().text(
+					status === "Requested"
+						? __("Claim registered. Factory will receive the product next.")
+						: __("Factory has received the product and is preparing the replacement.")
+				);
+				$w.find(".wc-items-claim").html((data.items || []).map((row) => {
+					if (to_flt(row.requested_qty) <= 0) return "";
+					return `<div class="wc-item done">
+						<div class="wc-item-name">${esc(row.item_name || row.item_code)}</div>
+						<div class="wc-item-stats"><span>${__("Claimed")}: <strong>${to_flt(row.requested_qty)}</strong></span></div>
+					</div>`;
+				}).filter(Boolean).join(""));
+				$foot.text(__("This claim is being handled by the factory team."));
+				return;
+			}
+
+			// No open claim — register a new one (step 1).
+			$flow.hide();
 			$w.find(".wc-items-claim").html((data.items || []).map((row, idx) => {
 				if (row.fully_claimed) {
 					return `<div class="wc-item done wc-item-row" data-idx="${idx}">
@@ -418,65 +481,94 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 					<input type="hidden" class="wc-batch-no" value="${esc(row.batch_no)}">
 				</div>`;
 			}).join("") || `<div class="wc-empty">${__("No items")}</div>`);
+			$btnRegister.show();
+			$foot.text(__("Enter how many items the customer is claiming. Factory will handle the rest."));
 		},
-		render_settle(data) {
-			$w.find(".wc-settle-result").addClass("show");
-			$w.find(".wc-settle-invoice-title").text(data.sales_invoice);
-			$w.find(".wc-settle-invoice-sub").text(
-				`${data.customer_name || data.customer} · ${frappe.datetime.str_to_user(data.posting_date)}`
-			);
 
-			const mode = data.settle_mode || "none";
-			const s = data.summary || {};
+		render_settle(data) {
+			this.render_head("settle", data);
+			const status = data.claim_status || "";
+			const action = data.action || "none";
+
 			$w.find(".wc-settle-pills").html(`
-				<span class="wc-pill purple">${esc(s.status || "—")}</span>
-				${to_flt(s.registered_qty) ? `<span class="wc-pill amber">${__("To receive")}: ${to_flt(s.registered_qty)}</span>` : ""}
-				${to_flt(s.claimed_qty) ? `<span class="wc-pill blue">${__("Received")}: ${to_flt(s.claimed_qty)}</span>` : ""}
+				${this.status_pill(status)}
+				${to_flt((data.summary || {}).requested_qty) ? `<span class="wc-pill amber">${__("Claimed")}: ${to_flt(data.summary.requested_qty)}</span>` : ""}
 			`);
+
+			WarehouseHelper.bind_company(data.company);
+			const default_wh = WarehouseHelper.default_warehouse(data);
 
 			const $flow = $w.find(".wc-settle-flow");
 			const $hint = $w.find(".wc-settle-hint");
-			const $btn = $w.find(".wc-btn-settle-complete");
+			const $foot = $w.find(".wc-settle-foot");
+			const $receiveFields = $w.find(".wc-settle-receive-fields");
+			const $prepareFields = $w.find(".wc-settle-prepare-fields");
+			const $btnReceive = $w.find(".wc-btn-receive");
+			const $btnPrepare = $w.find(".wc-btn-prepare");
 
-			WarehouseHelper.bind_company(data.company);
+			$receiveFields.hide();
+			$prepareFields.hide();
+			$btnReceive.hide();
+			$btnPrepare.hide();
 
-			if (mode === "none") {
-				$flow.hide();
-				$w.find(".wc-settle-fields").hide();
-				$btn.prop("disabled", true);
-				$hint.text(__("No claim on this invoice. Pick one from the list below or search another."));
-				$w.find(".wc-items-settle").empty();
+			if (action === "receive") {
+				FlowSteps.render($flow, 2);
+				$hint.text(__("Confirm the product is in hand, pick its condition and the warehouse to receive it into."));
+				$receiveFields.show();
+				if (default_wh && !controls.condition_wh.get_value()) controls.condition_wh.set_value(default_wh);
+				$w.find(".wc-items-settle").html((data.items || []).map((row) => {
+					if (to_flt(row.requested_qty) <= 0) return "";
+					return `<div class="wc-item">
+						<div class="wc-item-name">${esc(row.item_name || row.item_code)}</div>
+						<div class="wc-item-stats"><span>${__("Claimed qty")}: <strong>${to_flt(row.requested_qty)}</strong></span></div>
+					</div>`;
+				}).filter(Boolean).join("") || `<div class="wc-empty">${__("Nothing to receive")}</div>`);
+				$btnReceive.show();
+				$foot.text(__("This books a Material Receipt into the condition warehouse."));
 				return;
 			}
 
-			$btn.prop("disabled", false);
-			WarehouseHelper.show_fields(mode);
-
-			if (mode === "full") {
-				$flow.show().find(".wc-flow-step").addClass("on");
-				$hint.text(__("Choose all warehouses from the dropdowns below, then tap Complete."));
-			} else {
-				$flow.show().find(".wc-flow-step").removeClass("on").last().addClass("on");
-				$hint.text(__("Choose replacement warehouse and qty, then tap Complete."));
+			if (action === "prepare") {
+				FlowSteps.render($flow, 3);
+				$hint.text(__("Choose the replacement warehouse and quantity, then prepare the delivery note."));
+				$prepareFields.show();
+				if (default_wh && !controls.replacement_wh.get_value()) controls.replacement_wh.set_value(default_wh);
+				$w.find(".wc-items-settle").html((data.items || []).map((row, idx) => {
+					const pending = to_flt(row.pending_prepare_qty);
+					if (pending <= 0) return "";
+					return `<div class="wc-item wc-item-row" data-idx="${idx}"
+						data-item="${esc(row.item_code)}">
+						<div class="wc-item-name">${esc(row.item_name || row.item_code)}</div>
+						<div class="wc-item-stats">
+							<span>${__("Claimed qty")}: <strong>${to_flt(row.requested_qty)}</strong></span>
+							<span>${__("In stock")}: <strong>${to_flt(row.received_qty)}</strong></span>
+						</div>
+						<div class="wc-item-input">
+							<label>${__("Replacement qty")}</label>
+							<input type="number" min="0" class="wc-replacement-qty" value="${pending}">
+						</div>
+						<input type="hidden" class="wc-replacement-item-code" value="${esc(row.item_code)}">
+					</div>`;
+				}).filter(Boolean).join("") || `<div class="wc-empty">${__("Nothing to prepare")}</div>`);
+				$btnPrepare.show();
+				$foot.text(__("This drafts the replacement delivery note. The salesman submits it on hand-over."));
+				return;
 			}
 
-			$w.find(".wc-items-settle").html((data.items || []).map((row, idx) => {
-				const pending = to_flt(row.pending_settle_qty);
-				if (pending <= 0) return "";
-				return `<div class="wc-item wc-item-row" data-idx="${idx}"
-					data-item="${esc(row.item_code)}" data-serial="${esc(row.serial_no)}" data-batch="${esc(row.batch_no)}">
-					<div class="wc-item-name">${esc(row.item_name || row.item_code)}</div>
-					<div class="wc-item-stats">
-						<span>${__("Claim qty")}: <strong>${to_flt(row.registered_qty) || to_flt(row.claimed_qty)}</strong></span>
-						${to_flt(row.replaced_qty) ? `<span>${__("Already replaced")}: <strong>${to_flt(row.replaced_qty)}</strong></span>` : ""}
-					</div>
-					<div class="wc-item-input">
-						<label>${__("Replacement qty")}</label>
-						<input type="number" min="0" class="wc-replacement-qty" value="${pending}">
-					</div>
-					<input type="hidden" class="wc-replacement-item-code" value="${esc(row.item_code)}">
-				</div>`;
-			}).filter(Boolean).join("") || `<div class="wc-empty">${__("Nothing to settle on this invoice")}</div>`);
+			// Ready (with salesman) or Completed / no claim — nothing for factory to do.
+			FlowSteps.render($flow, status === "Completed" ? 4 : FlowSteps.step_for(status));
+			$w.find(".wc-items-settle").empty();
+			if (status === "Ready") {
+				$hint.text(__("Replacement is prepared and waiting for the salesman to hand it over."));
+				$foot.text("");
+			} else if (status === "Completed") {
+				$hint.text(__("This claim is complete."));
+				$foot.text("");
+			} else {
+				$flow.hide();
+				$hint.text(__("No open claim on this invoice. Pick one from the list below or search another."));
+				$foot.text("");
+			}
 		},
 	};
 
@@ -501,7 +593,7 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 			if (!items.length) frappe.throw(__("Enter claim quantity for at least one item."));
 			await frappe.confirm(__("Register claim for {0} item(s)?", [items.length]), async () => {
 				const res = await frappe.call({
-					method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.create_warranty_return",
+					method: `${M}.create_warranty_return`,
 					args: { sales_invoice: state.invoice.sales_invoice, items },
 					freeze: true,
 				});
@@ -510,78 +602,99 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 				frappe.show_alert({ message: __("Claim registered"), indicator: "green" });
 			});
 		},
+		async handover() {
+			if (!state.invoice?.pending_delivery_note) frappe.throw(__("Nothing is ready to hand over."));
+			await frappe.confirm(__("Confirm the customer has received the replacement?"), async () => {
+				const res = await frappe.call({
+					method: `${M}.handover_warranty_replacement`,
+					args: {
+						sales_invoice: state.invoice.sales_invoice,
+						delivery_note: state.invoice.pending_delivery_note,
+						return_invoice: state.invoice.pending_return_invoice,
+					},
+					freeze: true,
+				});
+				state.invoice = res.message.invoice;
+				InvoiceLoader.render(state.invoice, "claim");
+				frappe.show_alert({ message: __("Handed over — claim completed"), indicator: "green" });
+			});
+		},
 	};
 
 	const SettleActions = {
+		async receive() {
+			if (!state.invoice?.sales_invoice) frappe.throw(__("Search an invoice first."));
+			const product_condition = controls.condition.get_value();
+			const condition_warehouse = controls.condition_wh.get_value();
+			if (!product_condition) frappe.throw(__("Select product condition."));
+			if (!condition_warehouse) frappe.throw(__("Select the warehouse to receive into."));
+
+			await frappe.confirm(__("Receive the claimed product into stock?"), async () => {
+				const res = await frappe.call({
+					method: `${M}.receive_warranty_claim`,
+					args: {
+						sales_invoice: state.invoice.sales_invoice,
+						return_invoice: state.invoice.pending_return_invoice,
+						condition_warehouse,
+						product_condition,
+					},
+					freeze: true,
+				});
+				state.invoice = res.message.invoice;
+				InvoiceLoader.render(state.invoice, "settle");
+				frappe.show_alert({ message: __("Received into stock"), indicator: "green" });
+			});
+		},
 		collect_replacement_items() {
 			const items = [];
 			(state.invoice?.items || []).forEach((row, idx) => {
 				const replacement_qty = RowReader.read_number(idx, ".wc-replacement-qty", "settle");
 				if (replacement_qty <= 0) return;
-				const $row = $w.find(`.wc-tab-settle .wc-item-row[data-idx="${idx}"]`).first();
 				items.push({
 					sales_invoice_item: row.sales_invoice_item,
 					item_code: row.item_code,
 					replacement_item_code:
-						RowReader.read_text(idx, ".wc-replacement-item-code", "settle") || $row.data("item") || row.item_code,
+						RowReader.read_text(idx, ".wc-replacement-item-code", "settle") || row.item_code,
 					replacement_qty,
 				});
 			});
 			return items;
 		},
-		async complete() {
+		async prepare() {
 			if (!state.invoice?.sales_invoice) frappe.throw(__("Search an invoice first."));
 			const items = this.collect_replacement_items();
 			if (!items.length) frappe.throw(__("Enter replacement quantity."));
 			const replacement_warehouse = controls.replacement_wh.get_value();
 			if (!replacement_warehouse) frappe.throw(__("Select replacement warehouse."));
 
-			const mode = state.invoice.settle_mode;
-			const args = {
-				sales_invoice: state.invoice.sales_invoice,
-				return_invoice: state.invoice.pending_return_invoice || null,
-				replacement_warehouse,
-				items,
-			};
-
-			if (mode === "full") {
-				args.receive_warehouse = controls.receive_wh.get_value();
-				args.product_condition = controls.condition.get_value();
-				args.target_warehouse = controls.target_wh.get_value();
-				if (!args.receive_warehouse) frappe.throw(__("Select receive warehouse."));
-				if (!args.product_condition) frappe.throw(__("Select product condition."));
-				if (!args.target_warehouse) frappe.throw(__("Select move to warehouse."));
-			}
-
-			const msg = mode === "full"
-				? __("Complete settlement? This will receive stock, transfer by condition, and issue replacement.")
-				: __("Issue replacement to customer?");
-
-			await frappe.confirm(msg, async () => {
+			await frappe.confirm(__("Prepare the replacement delivery note?"), async () => {
 				const res = await frappe.call({
-					method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.settle_warranty_claim",
-					args,
+					method: `${M}.prepare_warranty_replacement`,
+					args: {
+						sales_invoice: state.invoice.sales_invoice,
+						return_invoice: state.invoice.pending_return_invoice,
+						replacement_warehouse,
+						items,
+					},
 					freeze: true,
 				});
 				state.invoice = res.message.invoice;
 				InvoiceLoader.render(state.invoice, "settle");
-				frappe.show_alert({ message: __("Settlement complete"), indicator: "green" });
+				frappe.show_alert({ message: __("Replacement prepared — ready for hand-over"), indicator: "green" });
 			});
 		},
 	};
 
 	async function setup_context() {
-		const res = await frappe.call({
-			method: "sunshine_power_ltd.sunshine_power_ltd.page.warranty.warranty.get_warranty_context",
-		});
+		const res = await frappe.call({ method: `${M}.get_warranty_context` });
 		state.context = res.message || {};
 		TabManager.init(state.context);
 
 		const { show_claim_tab, show_settle_tab } = state.context;
 		if (show_claim_tab && !show_settle_tab) {
-			$w.find(".wc-hero p").text(__("Register how many items the customer is claiming."));
+			$w.find(".wc-hero p").text(__("Register claims and confirm hand-over to the customer."));
 		} else if (show_settle_tab && !show_claim_tab) {
-			$w.find(".wc-hero p").text(__("Complete receive, transfer, and replacement in one step."));
+			$w.find(".wc-hero p").text(__("Receive claimed products and prepare replacements."));
 		}
 	}
 
@@ -602,9 +715,7 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 
 	$w.find(".wc-btn-search-settle").on("click", async () => {
 		try {
-			await InvoiceLoader.load({
-				invoice_no: controls.invoice_settle.get_value(),
-			}, "settle");
+			await InvoiceLoader.load({ invoice_no: controls.invoice_settle.get_value() }, "settle");
 		} catch (e) {
 			console.error(e);
 		}
@@ -630,8 +741,10 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		}
 	});
 
-	$w.find(".wc-btn-return").on("click", () => ClaimActions.register());
-	$w.find(".wc-btn-settle-complete").on("click", () => SettleActions.complete());
+	$w.find(".wc-btn-register").on("click", () => ClaimActions.register());
+	$w.find(".wc-btn-handover").on("click", () => ClaimActions.handover());
+	$w.find(".wc-btn-receive").on("click", () => SettleActions.receive());
+	$w.find(".wc-btn-prepare").on("click", () => SettleActions.prepare());
 
 	controls.invoice_claim.$input.on("keydown", (e) => {
 		if (e.key === "Enter") $w.find(".wc-btn-search-claim").trigger("click");

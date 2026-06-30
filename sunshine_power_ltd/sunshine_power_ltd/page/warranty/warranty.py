@@ -342,7 +342,8 @@ def load_sales_invoice(sales_invoice):
 	history = get_claim_history(sales_invoice)
 
 	pending_return = active_returns[0] if active_returns else None
-	claim_status = (pending_return or {}).get("warranty_status") or ""
+	# Fall back to Requested for claims created before the status field was added.
+	claim_status = (pending_return or {}).get("warranty_status") or (STATUS_REQUESTED if pending_return else "")
 	product_condition = (pending_return or {}).get("product_condition") or ""
 	pending_delivery_note = _get_draft_replacement_dn(sales_invoice)
 
