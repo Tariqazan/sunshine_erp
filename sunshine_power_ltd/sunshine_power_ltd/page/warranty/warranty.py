@@ -6,7 +6,7 @@ from frappe.utils import cint, flt, nowdate
 
 PRODUCT_CONDITIONS = ("Damaged", "Sellable", "Repairable")
 
-WARRANTY_CLAIM_ROLES = frozenset({"LPR"})
+WARRANTY_CLAIM_ROLES = frozenset({"Salesman"})
 WARRANTY_SETTLE_ROLES = frozenset({"Factory User"})
 
 
