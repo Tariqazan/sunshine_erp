@@ -48,6 +48,25 @@ def sales_invoice_on_submit(doc, method=None):
 
 	# --- 2. Stock Entry (Material Receipt) to record valuation rate ---
 	company = doc.company
+
+	# Re-fetch purchase prices directly from DB to bypass permlevel restrictions
+	item_prices = {}
+	for row in items_with_price:
+		db_price = frappe.db.get_value(
+			"Sales Invoice Item",
+			row.name,
+			"custom_purchase_price",
+		)
+		if flt(db_price):
+			item_prices[row.name] = flt(db_price)
+
+	if not item_prices:
+		frappe.msgprint(
+			_("No purchase price found on invoice items. Stock Entry skipped."),
+			alert=True,
+		)
+		return
+
 	default_warehouse = frappe.db.get_value(
 		"Warehouse",
 		{"company": company, "is_group": 0, "disabled": 0},
@@ -57,22 +76,28 @@ def sales_invoice_on_submit(doc, method=None):
 	se = frappe.new_doc("Stock Entry")
 	se.stock_entry_type = "Material Receipt"
 	se.company = company
+	se.posting_date = doc.posting_date
+	se.set_posting_time = 1
 	se.remarks = _("Auto-generated: Valuation update from Sales Invoice {0}").format(doc.name)
 
 	for row in items_with_price:
+		purchase_price = item_prices.get(row.name)
+		if not purchase_price:
+			continue
+
 		target_wh = row.get("warehouse") or default_warehouse
 		if not target_wh:
-			frappe.msgprint(
-				_("No warehouse found for item {0}. Skipping Stock Entry row.").format(row.item_code),
-				alert=True,
+			frappe.throw(
+				_("No warehouse found for item {0}. Cannot create Stock Entry.").format(row.item_code),
 			)
-			continue
 
 		se.append("items", {
 			"item_code": row.item_code,
 			"qty": row.qty,
-			"basic_rate": row.custom_purchase_price,
+			"basic_rate": purchase_price,
 			"t_warehouse": target_wh,
+			"uom": row.uom,
+			"conversion_factor": row.conversion_factor or 1,
 		})
 
 	if not se.items:
