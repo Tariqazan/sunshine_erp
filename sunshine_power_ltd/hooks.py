@@ -144,6 +144,7 @@ doc_events = {
 	"Payment Entry": {
 		"validate": "sunshine_power_ltd.permissions.validate_payment_entry_accountant",
 		"before_submit": "sunshine_power_ltd.permissions.before_submit_payment_entry_accountant",
+		"on_submit": "sunshine_power_ltd.overrides.payment_entry_on_submit",
 	},
 	"Sales Invoice": {
 		"validate": [

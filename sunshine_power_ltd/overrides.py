@@ -19,6 +19,9 @@ def sales_invoice_on_submit(doc, method=None):
 	2. Submit a Material Receipt Stock Entry to record the purchase cost
 	   at the custom_purchase_price rate — this directly impacts COGS
 	   via the Stock Ledger valuation rate.
+	3. If custom_expense_amount is set, create a Journal Entry:
+	   Debit  5214 - Sales Expenses - SPL
+	   Credit 1110 - Cash - SPL
 
 	Skipped for Sales Return invoices.
 	"""
@@ -91,4 +94,97 @@ def sales_invoice_on_submit(doc, method=None):
 		frappe.throw(
 			_("Could not create Stock Entry for valuation update: {0}").format(str(e)),
 			title=_("Stock Entry Error"),
+		)
+
+	# --- 3. Journal Entry for sales expense taken as cash ---
+	_create_sales_expense_journal(doc)
+
+
+def payment_entry_on_submit(doc, method=None):
+	charge_amount = flt(doc.get("custom_charge_amount"))
+	if not charge_amount:
+		return
+
+	je = frappe.new_doc("Journal Entry")
+	je.voucher_type = "Journal Entry"
+	je.company = doc.company
+	je.posting_date = doc.posting_date
+	je.cheque_no = doc.name
+	je.cheque_date = doc.posting_date
+	je.remark = _("Bank charges for Payment Entry {0}").format(doc.name)
+
+	je.append("accounts", {
+		"account": "5221 - Bank Charges - SPL",
+		"debit_in_account_currency": charge_amount,
+		"credit_in_account_currency": 0,
+	})
+
+	je.append("accounts", {
+		"account": "1110 - Cash - SPL",
+		"debit_in_account_currency": 0,
+		"credit_in_account_currency": charge_amount,
+	})
+
+	try:
+		je.flags.ignore_permissions = True
+		je.insert()
+		je.submit()
+		frappe.msgprint(
+			_("Journal Entry {0} created for bank charges.").format(je.name),
+			alert=True,
+		)
+	except Exception as e:
+		frappe.log_error(
+			message=frappe.get_traceback(),
+			title="Journal Entry failed for Payment Entry {0}".format(doc.name),
+		)
+		frappe.throw(
+			_("Could not create Journal Entry for bank charges: {0}").format(str(e)),
+			title=_("Journal Entry Error"),
+		)
+
+
+def _create_sales_expense_journal(doc):
+	expense_amount = flt(doc.get("custom_expense_amount"))
+	if not expense_amount:
+		return
+
+	je = frappe.new_doc("Journal Entry")
+	je.voucher_type = "Journal Entry"
+	je.company = doc.company
+	je.posting_date = doc.posting_date
+	je.cheque_no = doc.name
+	je.cheque_date = doc.posting_date
+	je.remark = _("Sales expense for Invoice {0}").format(doc.name)
+
+	je.append("accounts", {
+		"account": "5214 - Sales Expenses - SPL",
+		"debit_in_account_currency": expense_amount,
+		"credit_in_account_currency": 0,
+		"cost_center": doc.cost_center,
+	})
+
+	je.append("accounts", {
+		"account": "1110 - Cash - SPL",
+		"debit_in_account_currency": 0,
+		"credit_in_account_currency": expense_amount,
+		"cost_center": doc.cost_center,
+	})
+
+	try:
+		je.flags.ignore_permissions = True
+		je.insert()
+		je.submit()
+		frappe.msgprint(
+			_("Journal Entry {0} created for sales expense.").format(je.name),
+			alert=True,
+		)
+	except Exception as e:
+		frappe.log_error(
+			message=frappe.get_traceback(),
+			title="Journal Entry failed for Sales Invoice {0}".format(doc.name),
+		)
+		frappe.throw(
+			_("Could not create Journal Entry for sales expense: {0}").format(str(e)),
+			title=_("Journal Entry Error"),
 		)
