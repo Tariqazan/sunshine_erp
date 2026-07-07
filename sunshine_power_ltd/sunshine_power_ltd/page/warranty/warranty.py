@@ -5,7 +5,9 @@ from frappe.utils import cint, flt, nowdate
 PRODUCT_CONDITIONS = ("Damaged", "Sellable", "Repairable")
 
 WARRANTY_CLAIM_ROLES = frozenset({"Salesman"})
-WARRANTY_SETTLE_ROLES = frozenset({"Factory User"})
+# Salesman also settles (receives + prepares) so they get both warranty tabs and
+# both sets of actions; Factory User is settle-only.
+WARRANTY_SETTLE_ROLES = frozenset({"Factory User", "Salesman"})
 
 # Linear claim lifecycle, tracked on the (always-draft) return Sales Invoice.
 STATUS_REQUESTED = "Requested"
@@ -1139,7 +1141,18 @@ def handover_warranty_replacement(sales_invoice, delivery_note=None, return_invo
 
 	if not return_invoice:
 		return_invoice = invoice_data.get("pending_return_invoice")
-	_set_warranty_status(return_invoice, STATUS_COMPLETED)
+
+	# Claim is done — submit the (until now draft) return Sales Invoice so the
+	# credit note posts, and mark it Completed.
+	if return_invoice:
+		return_doc = frappe.get_doc("Sales Invoice", return_invoice)
+		if return_doc.docstatus == 0:
+			if _has_status_field():
+				return_doc.custom_warranty_status = STATUS_COMPLETED
+			return_doc.flags.ignore_permissions = ignore_permissions
+			return_doc.submit()
+		else:
+			_set_warranty_status(return_invoice, STATUS_COMPLETED)
 
 	return {
 		"doctype": "Delivery Note",
