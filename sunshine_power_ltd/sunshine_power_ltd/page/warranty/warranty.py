@@ -127,15 +127,16 @@ def get_warranty_context():
 	roles = set(frappe.get_roles(user))
 	is_administrator = user == "Administrator" or "Administrator" in roles
 
+	has_claim_role = bool(roles.intersection(WARRANTY_CLAIM_ROLES))
+	has_settle_role = bool(roles.intersection(WARRANTY_SETTLE_ROLES))
+
 	if is_administrator:
 		show_claim_tab = True
 		show_settle_tab = True
-	elif roles.intersection(WARRANTY_CLAIM_ROLES):
-		show_claim_tab = True
-		show_settle_tab = False
-	elif roles.intersection(WARRANTY_SETTLE_ROLES):
-		show_claim_tab = False
-		show_settle_tab = True
+	elif has_claim_role or has_settle_role:
+		# Evaluate each role independently so a user holding both roles sees both tabs.
+		show_claim_tab = has_claim_role
+		show_settle_tab = has_settle_role
 	else:
 		show_claim_tab = can_warranty_claim(user)
 		show_settle_tab = can_warranty_settle(user)
