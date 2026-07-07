@@ -211,11 +211,15 @@ def _journal_entry_permission_error():
 def validate_journal_entry_admin(doc, method=None):
 	if frappe.flags.in_install or frappe.flags.in_patch or frappe.flags.in_migrate:
 		return
+	if getattr(getattr(doc, "flags", None), "ignore_permissions", False):
+		return
 	if not can_manage_journal_entry():
 		_journal_entry_permission_error()
 
 
 def before_submit_journal_entry_admin(doc, method=None):
+	if getattr(getattr(doc, "flags", None), "ignore_permissions", False):
+		return
 	if not can_manage_journal_entry():
 		_journal_entry_permission_error()
 
