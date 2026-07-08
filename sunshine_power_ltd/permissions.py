@@ -24,6 +24,8 @@ JOURNAL_ENTRY_ADMIN_ROLES = frozenset({
 	"Administrator",
 	"System Manager",
 	"System Admin",
+	# Salesman has full Journal Entry access (create/write/submit).
+	"Salesman",
 })
 
 JOURNAL_ENTRY_RESTRICTED_PTYPES = frozenset({
@@ -33,17 +35,6 @@ JOURNAL_ENTRY_RESTRICTED_PTYPES = frozenset({
 	"cancel",
 	"amend",
 	"delete",
-})
-
-# Salesman (salesperson): create/save drafts only — no submit/cancel/amend.
-JOURNAL_ENTRY_DRAFT_ROLES = frozenset({
-	"Salesman",
-})
-
-JOURNAL_ENTRY_DRAFT_DENIED_PTYPES = frozenset({
-	"submit",
-	"cancel",
-	"amend",
 })
 
 PAYMENT_ENTRY_SUBMIT_ROLES = frozenset({
@@ -199,32 +190,11 @@ def can_manage_journal_entry(user: str | None = None) -> bool:
 	return bool(JOURNAL_ENTRY_ADMIN_ROLES.intersection(frappe.get_roles(user)))
 
 
-def is_journal_entry_draft_only_user(user: str | None = None) -> bool:
-	if not user:
-		user = frappe.session.user
-	if can_manage_journal_entry(user):
-		return False
-	return bool(JOURNAL_ENTRY_DRAFT_ROLES.intersection(frappe.get_roles(user)))
-
-
 def has_journal_entry_permission(doc, ptype: str | None = None, user: str | None = None, debug=False):
 	if not user:
 		user = frappe.session.user
 
 	if can_manage_journal_entry(user):
-		return True
-
-	if is_journal_entry_draft_only_user(user):
-		if ptype in JOURNAL_ENTRY_DRAFT_DENIED_PTYPES:
-			return False
-		if ptype == "delete":
-			if doc and doc.docstatus == 0 and (doc.get("owner") or user) == user:
-				return True
-			return False
-		if ptype in ("create", "write"):
-			if doc and doc.docstatus != 0:
-				return False
-			return True
 		return True
 
 	if ptype in JOURNAL_ENTRY_RESTRICTED_PTYPES:
@@ -240,36 +210,19 @@ def _journal_entry_permission_error():
 	)
 
 
-def _journal_entry_draft_only_error():
-	frappe.throw(
-		_(
-			"Sales users can only save Journal Entries as draft. "
-			"A System Administrator must submit."
-		),
-		frappe.PermissionError,
-	)
-
-
 def validate_journal_entry_admin(doc, method=None):
 	if frappe.flags.in_install or frappe.flags.in_patch or frappe.flags.in_migrate:
 		return
 	if getattr(getattr(doc, "flags", None), "ignore_permissions", False):
 		return
-	if can_manage_journal_entry():
-		return
-	if is_journal_entry_draft_only_user() and doc.docstatus == 0:
-		return
-	if is_journal_entry_draft_only_user():
-		_journal_entry_draft_only_error()
-	_journal_entry_permission_error()
+	if not can_manage_journal_entry():
+		_journal_entry_permission_error()
 
 
 def before_submit_journal_entry_admin(doc, method=None):
 	if getattr(getattr(doc, "flags", None), "ignore_permissions", False):
 		return
 	if not can_manage_journal_entry():
-		if is_journal_entry_draft_only_user():
-			_journal_entry_draft_only_error()
 		_journal_entry_permission_error()
 
 

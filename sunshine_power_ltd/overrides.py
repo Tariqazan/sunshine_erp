@@ -1,6 +1,6 @@
 import frappe
 from frappe import _
-from frappe.utils import cint, flt
+from frappe.utils import add_days, cint, flt
 
 
 def sync_sales_invoice_item_running_price(doc, method=None):
@@ -76,7 +76,9 @@ def sales_invoice_on_submit(doc, method=None):
 	se = frappe.new_doc("Stock Entry")
 	se.stock_entry_type = "Material Receipt"
 	se.company = company
-	se.posting_date = doc.posting_date
+	# Receive the stock one day before the invoice so the valuation rate is in the
+	# ledger before the sale consumes it.
+	se.posting_date = add_days(doc.posting_date, -1)
 	se.set_posting_time = 1
 	se.remarks = _("Auto-generated: Valuation update from Sales Invoice {0}").format(doc.name)
 
