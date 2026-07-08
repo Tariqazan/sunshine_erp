@@ -5,6 +5,7 @@ SALES_INVOICE_ALLOWED_ROLES = frozenset({
 	"Administrator",
 	"System Admin",
 	"Salesman",
+	"Head Office",
 })
 
 # Factory User may submit return invoices (warranty claims) only — not regular invoices.
@@ -150,11 +151,11 @@ def before_submit_sales_invoice(doc, method=None):
 		return
 	if doc.get("is_return"):
 		frappe.throw(
-			_("Only Salesman, System Admin, Administrator, or Factory User can submit Sales Invoice returns."),
+			_("Only Salesman, Head Office, System Admin, Administrator, or Factory User can submit Sales Invoice returns."),
 			frappe.PermissionError,
 		)
 	frappe.throw(
-		_("Only Salesman, System Admin, or Administrator can submit Sales Invoices."),
+		_("Only Salesman, Head Office, System Admin, or Administrator can submit Sales Invoices."),
 		frappe.PermissionError,
 	)
 
@@ -167,7 +168,7 @@ def validate_sales_invoice_allowed(doc, method=None):
 	if can_create_sales_invoice():
 		return
 	frappe.throw(
-		_("Only Salesman, System Admin, or Administrator can create or save Sales Invoices."),
+		_("Only Salesman, Head Office, System Admin, or Administrator can create or save Sales Invoices."),
 		frappe.PermissionError,
 	)
 
