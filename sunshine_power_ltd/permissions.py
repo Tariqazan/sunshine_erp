@@ -20,23 +20,6 @@ SALES_INVOICE_READ_ALL_ROLES = frozenset({
 	"Factory User",
 })
 
-JOURNAL_ENTRY_ADMIN_ROLES = frozenset({
-	"Administrator",
-	"System Manager",
-	"System Admin",
-	# Salesman has full Journal Entry access (create/write/submit).
-	"Salesman",
-})
-
-JOURNAL_ENTRY_RESTRICTED_PTYPES = frozenset({
-	"create",
-	"write",
-	"submit",
-	"cancel",
-	"amend",
-	"delete",
-})
-
 PAYMENT_ENTRY_SUBMIT_ROLES = frozenset({
 	"System Admin",
 	"Accounts",
@@ -54,7 +37,14 @@ PAYMENT_ENTRY_DRAFT_DENIED_PTYPES = frozenset({
 	"amend",
 })
 
-ACCOUNTING_RESTRICTED_PTYPES = JOURNAL_ENTRY_RESTRICTED_PTYPES
+ACCOUNTING_RESTRICTED_PTYPES = frozenset({
+	"create",
+	"write",
+	"submit",
+	"cancel",
+	"amend",
+	"delete",
+})
 
 
 def can_read_all_sales_invoices(user: str | None = None) -> bool:
@@ -180,50 +170,6 @@ def validate_sales_invoice_allowed(doc, method=None):
 		_("Only Salesman, System Admin, or Administrator can create or save Sales Invoices."),
 		frappe.PermissionError,
 	)
-
-
-def can_manage_journal_entry(user: str | None = None) -> bool:
-	if not user:
-		user = frappe.session.user
-	if user == "Administrator":
-		return True
-	return bool(JOURNAL_ENTRY_ADMIN_ROLES.intersection(frappe.get_roles(user)))
-
-
-def has_journal_entry_permission(doc, ptype: str | None = None, user: str | None = None, debug=False):
-	if not user:
-		user = frappe.session.user
-
-	if can_manage_journal_entry(user):
-		return True
-
-	if ptype in JOURNAL_ENTRY_RESTRICTED_PTYPES:
-		return False
-
-	return True
-
-
-def _journal_entry_permission_error():
-	frappe.throw(
-		_("Only System Administrator can create, save, or submit Journal Entries."),
-		frappe.PermissionError,
-	)
-
-
-def validate_journal_entry_admin(doc, method=None):
-	if frappe.flags.in_install or frappe.flags.in_patch or frappe.flags.in_migrate:
-		return
-	if getattr(getattr(doc, "flags", None), "ignore_permissions", False):
-		return
-	if not can_manage_journal_entry():
-		_journal_entry_permission_error()
-
-
-def before_submit_journal_entry_admin(doc, method=None):
-	if getattr(getattr(doc, "flags", None), "ignore_permissions", False):
-		return
-	if not can_manage_journal_entry():
-		_journal_entry_permission_error()
 
 
 def can_submit_payment_entry(user: str | None = None) -> bool:
