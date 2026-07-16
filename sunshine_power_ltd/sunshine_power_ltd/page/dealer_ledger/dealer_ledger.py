@@ -90,38 +90,216 @@ def _build_filter_conditions(customer=None, from_date=None, to_date=None, sales_
 	return conditions, values, sales_user
 
 
+def _build_payment_conditions(customer=None, from_date=None, to_date=None):
+	"""Conditions for standalone / advance customer receipts (Payment Entry).
+
+	These are receipts from customers with an unallocated (advance) portion,
+	i.e. money received that is not tied to a Sales Invoice.
+	"""
+	conditions = [
+		"docstatus = 1",
+		"payment_type = 'Receive'",
+		"party_type = 'Customer'",
+		"unallocated_amount > 0",
+	]
+	values = []
+
+	if customer:
+		conditions.append("party = %s")
+		values.append(customer)
+	if from_date:
+		conditions.append("posting_date >= %s")
+		values.append(from_date)
+	if to_date:
+		conditions.append("posting_date <= %s")
+		values.append(to_date)
+
+	return conditions, values
+
+
 def _fetch_dealer_ledger_rows(customer=None, from_date=None, to_date=None, sales_user=None, start=0, limit=None):
 	conditions, values, resolved_sales_user = _build_filter_conditions(
 		customer, from_date, to_date, sales_user
 	)
 	can_view_purchase_price = _can_view_purchase_price()
-	where_clause = " AND ".join(conditions)
+	inv_where = " AND ".join(conditions)
 
-	count_query = f"SELECT count(*) FROM `tabSales Invoice` WHERE {where_clause}"
-	total_count = frappe.db.sql(count_query, tuple(values))[0][0]
+	# Advance (unallocated) customer receipts have no sales-user attribution, so
+	# they are only shown when the view is not restricted to a single sales user.
+	include_advances = resolved_sales_user is None
+	pay_conditions, pay_values = _build_payment_conditions(customer, from_date, to_date)
+	pay_where = " AND ".join(pay_conditions)
+
+	total_count = frappe.db.sql(
+		f"SELECT count(*) FROM `tabSales Invoice` WHERE {inv_where}", tuple(values)
+	)[0][0]
+	if include_advances:
+		total_count += frappe.db.sql(
+			f"SELECT count(*) FROM `tabPayment Entry` WHERE {pay_where}", tuple(pay_values)
+		)[0][0]
 
 	if total_count == 0:
 		return [], 0, resolved_sales_user
 
-	inv_query = f"""
+	# Unified, chronologically-ordered index of ledger entries (invoices + advances)
+	# so pagination spans both sources correctly.
+	if include_advances:
+		index_query = f"""
+			SELECT entry_type, name, sort_date FROM (
+				SELECT 'invoice' AS entry_type, name AS name, posting_date AS sort_date
+				FROM `tabSales Invoice` WHERE {inv_where}
+				UNION ALL
+				SELECT 'payment' AS entry_type, name AS name, posting_date AS sort_date
+				FROM `tabPayment Entry` WHERE {pay_where}
+			) AS ledger
+			ORDER BY sort_date DESC, name DESC
+		"""
+		index_values = list(values) + list(pay_values)
+	else:
+		index_query = f"""
+			SELECT 'invoice' AS entry_type, name AS name, posting_date AS sort_date
+			FROM `tabSales Invoice` WHERE {inv_where}
+			ORDER BY sort_date DESC, name DESC
+		"""
+		index_values = list(values)
+
+	if limit is not None:
+		index_query += " LIMIT %s OFFSET %s"
+		index_values.extend([cint(limit), cint(start)])
+
+	index_rows = frappe.db.sql(index_query, tuple(index_values), as_dict=True)
+	if not index_rows:
+		return [], total_count, resolved_sales_user
+
+	invoice_names = [r.name for r in index_rows if r.entry_type == "invoice"]
+	advance_pe_names = [r.name for r in index_rows if r.entry_type == "payment"]
+
+	invoice_rows_by_name = _build_invoice_rows(invoice_names, can_view_purchase_price)
+	advance_rows_by_name = _build_advance_rows(advance_pe_names, can_view_purchase_price)
+
+	rows = []
+	serial = cint(start) + 1
+	for idx_row in index_rows:
+		if idx_row.entry_type == "invoice":
+			row = invoice_rows_by_name.get(idx_row.name)
+		else:
+			row = advance_rows_by_name.get(idx_row.name)
+		if not row:
+			continue
+		row["entry_sl"] = serial
+		rows.append(row)
+		serial += 1
+
+	return rows, total_count, resolved_sales_user
+
+
+def _build_advance_rows(advance_pe_names, can_view_purchase_price):
+	"""Build ledger rows for standalone / advance customer receipts."""
+	if not advance_pe_names:
+		return {}
+
+	payment_entries = frappe.get_all(
+		"Payment Entry",
+		filters={"name": ["in", advance_pe_names]},
+		fields=[
+			"name", "posting_date", "party", "party_name", "reference_no",
+			"mode_of_payment", "paid_amount", "unallocated_amount",
+		],
+	)
+
+	charge_by_pe = defaultdict(float)
+	charge_rows = frappe.db.sql(
+		"""
+		SELECT parent, COALESCE(SUM(tax_amount), 0) AS bank_charge
+		FROM `tabAdvance Taxes and Charges`
+		WHERE parent IN %s
+		GROUP BY parent
+		""",
+		(tuple(advance_pe_names),),
+		as_dict=True,
+	)
+	for r in charge_rows:
+		charge_by_pe[r.parent] = _flt(r.bank_charge)
+
+	rows_by_name = {}
+	for pe in payment_entries:
+		paid = _flt(pe.paid_amount)
+		deposit = _flt(pe.unallocated_amount)
+		# Attribute only the advance portion of any bank charge to this row.
+		full_charge = charge_by_pe.get(pe.name) or 0
+		charge = full_charge * (deposit / paid) if paid > 0 else 0
+		net_deposit = deposit - charge
+		# No sales attached, so the receipt is a credit → negative outstanding.
+		balance_tk = -net_deposit
+
+		payment_detail = {
+			"payment_name": pe.name,
+			"deposit_slip_no": pe.reference_no,
+			"bank_name": pe.mode_of_payment,
+			"deposit_account_name": pe.party_name,
+			"deposit_amount": deposit,
+			"bank_charge": charge,
+			"net_deposit": net_deposit,
+		}
+
+		row = {
+			"invoice_name": pe.name,
+			"entry_type": "payment",
+			"date": pe.posting_date,
+			"date_display": formatdate(pe.posting_date),
+			"sales_user": "",
+			"transport_name": "",
+			"booking_deposit_slip_no": pe.reference_no or "",
+			"customer": pe.party,
+			"showroom_name": "",
+			"owner_name": "",
+			"total_qty": 0,
+			"total_selling_price": 0,
+			"total_commission": 0,
+			"deposit_slip_no": pe.reference_no or "",
+			"bank_name": pe.mode_of_payment or "",
+			"deposit_account_name": pe.party_name or "",
+			"deposit_amount": deposit,
+			"bank_charge": charge,
+			"net_deposit": net_deposit,
+			"balance_tk": balance_tk,
+			"total_selling_price_display": _money(0),
+			"total_commission_display": _money(0),
+			"deposit_amount_display": _money(deposit),
+			"bank_charge_display": _money(charge),
+			"net_deposit_display": _money(net_deposit),
+			"balance_tk_display": _money(balance_tk),
+			"items": [],
+			"payments": [_format_payment_for_pdf(payment_detail)],
+		}
+		if can_view_purchase_price:
+			row["total_purchase_price"] = 0
+			row["total_purchase_price_display"] = "—"
+
+		rows_by_name[pe.name] = row
+
+	return rows_by_name
+
+
+def _build_invoice_rows(invoice_names, can_view_purchase_price):
+	"""Build ledger rows for Sales Invoices, keyed by invoice name."""
+	if not invoice_names:
+		return {}
+
+	invoices = frappe.db.sql(
+		"""
 		SELECT
 			name as invoice_name, posting_date, customer, custom_sales_user,
 			custom_transport_name, custom_booking_slip_no, custom_showroom_name,
 			custom_owner_name, grand_total
 		FROM `tabSales Invoice`
-		WHERE {where_clause}
-		ORDER BY posting_date DESC, name DESC
-	"""
-	query_values = list(values)
-	if limit is not None:
-		inv_query += " LIMIT %s OFFSET %s"
-		query_values.extend([cint(limit), cint(start)])
-
-	invoices = frappe.db.sql(inv_query, tuple(query_values), as_dict=True)
+		WHERE name IN %s
+		""",
+		(tuple(invoice_names),),
+		as_dict=True,
+	)
 	if not invoices:
-		return [], total_count, resolved_sales_user
-
-	invoice_names = [inv.invoice_name for inv in invoices]
+		return {}
 
 	items = frappe.get_all(
 		"Sales Invoice Item",
@@ -209,8 +387,7 @@ def _fetch_dealer_ledger_rows(customer=None, from_date=None, to_date=None, sales
 			"net_deposit": allocated - bank_charge,
 		})
 
-	rows = []
-	serial = cint(start) + 1
+	rows_by_name = {}
 
 	for inv in invoices:
 		inv_items = items_by_inv.get(inv.invoice_name, [])
@@ -239,8 +416,8 @@ def _fetch_dealer_ledger_rows(customer=None, from_date=None, to_date=None, sales
 		booking_deposit_slip_no = inv.custom_booking_slip_no or ", ".join(deposit_slips)
 
 		row = {
-			"entry_sl": serial,
 			"invoice_name": inv.invoice_name,
+			"entry_type": "invoice",
 			"date": inv.posting_date,
 			"date_display": formatdate(inv.posting_date),
 			"sales_user": inv.custom_sales_user or "",
@@ -293,10 +470,9 @@ def _fetch_dealer_ledger_rows(customer=None, from_date=None, to_date=None, sales
 				item_row["purchase_price"] = _flt(i.custom_purchase_price)
 			row["items"].append(item_row)
 
-		rows.append(row)
-		serial += 1
+		rows_by_name[inv.invoice_name] = row
 
-	return rows, total_count, resolved_sales_user
+	return rows_by_name
 
 
 def _format_payment_for_pdf(payment):

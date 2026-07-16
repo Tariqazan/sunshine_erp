@@ -410,6 +410,10 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 		const body_rows = rows.map(r => {
 			const hasDetails = (r.items.length > 0 || r.payments.length > 0);
 			const expandIcon = hasDetails ? `<i class="fa fa-chevron-right dl-expand-icon" style="transition: transform 0.2s; font-size:10px;"></i>` : "";
+			const is_advance = r.entry_type === "payment";
+			const sales_items_label = is_advance
+				? `<span style="color:#2563eb; font-weight:600;">Advance Payment</span>`
+				: `${esc(r.items.length)} Items`;
 			
 			const items_html = r.items.length ? `
 				<div class="nested-table-wrapper">
@@ -488,7 +492,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 				<td>${esc(r.transport_name)}</td>
 				<td>${esc(r.booking_deposit_slip_no)}</td>
 				
-				<td>${esc(r.items.length)} Items</td>
+				<td>${sales_items_label}</td>
 				<td class="num">${esc(r.total_qty || 0)}</td>
 				<td class="num"></td>
 				<td class="num"></td>
@@ -579,7 +583,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 		const start_idx = total_count === 0 ? 0 : (current_page - 1) * page_size + 1;
 		const end_idx = Math.min(current_page * page_size, total_count);
 		
-		$w.find(".dl-page-info").text(`Showing ${start_idx} to ${end_idx} of Invoices: ${total_count}`);
+		$w.find(".dl-page-info").text(`Showing ${start_idx} to ${end_idx} of Entries: ${total_count}`);
 		
 		$w.find(".dl-btn-prev").prop("disabled", current_page === 1);
 		$w.find(".dl-btn-next").prop("disabled", end_idx >= total_count);

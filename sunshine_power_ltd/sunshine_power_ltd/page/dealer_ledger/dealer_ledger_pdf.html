@@ -220,14 +220,16 @@
 		</tr>
 	</table>
 
-	<div class="section-title">Invoice Details ({{ rows|length }} record{% if rows|length != 1 %}s{% endif %})</div>
+	<div class="section-title">Ledger Details ({{ rows|length }} record{% if rows|length != 1 %}s{% endif %})</div>
 
 	{% if rows %}
 		{% for row in rows %}
 		<div class="invoice-card">
 			<div class="invoice-head">
 				<div class="title-row">
-					#{{ row.entry_sl }} — {{ row.invoice_name }} &nbsp;&nbsp;|&nbsp;&nbsp; Date: {{ row.date_display }}
+					#{{ row.entry_sl }} — {{ row.invoice_name }}
+					{% if row.entry_type == "payment" %}&nbsp;&nbsp;|&nbsp;&nbsp; <span style="text-transform:uppercase;">Advance Payment</span>{% endif %}
+					&nbsp;&nbsp;|&nbsp;&nbsp; Date: {{ row.date_display }}
 				</div>
 				<div class="info-grid">
 					<div class="info-row">
@@ -362,7 +364,7 @@
 	{% endif %}
 
 	<div class="footer">
-		{{ footer_note }} — {{ rows|length }} invoice(s)
+		{{ footer_note }} — {{ rows|length }} entry(ies)
 	</div>
 </body>
 </html>
