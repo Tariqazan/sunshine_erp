@@ -488,6 +488,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 						${expandIcon} <span style="font-weight:600;">${r.entry_sl}</span>
 					</div>
 				</td>
+				<td style="white-space:nowrap; font-weight:600;">${esc(r.customer)}</td>
 				<td style="white-space:nowrap;">${esc(r.date ? frappe.datetime.str_to_user(r.date) : "")}</td>
 				<td>${esc(r.transport_name)}</td>
 				<td>${esc(r.booking_deposit_slip_no)}</td>
@@ -511,7 +512,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 				<td>${esc(r.owner_name)}</td>
 			</tr>
 			<tr class="child-row" id="child-${esc(r.invoice_name)}" style="display: none;">
-				<td colspan="${can_view_purchase_price ? 18 : 17}">
+				<td colspan="${can_view_purchase_price ? 19 : 18}">
 					<div class="child-container">
 						<div class="dl-child-grid">
 							${items_html}
@@ -528,7 +529,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 		<table class="dl-tbl">
 			<thead>
 				<tr class="dl-group-row">
-					<th colspan="4">Common</th>
+					<th colspan="5">Common</th>
 					<th colspan="${sales_colspan}">Sales Totals</th>
 					<th colspan="4">Deposit Totals</th>
 					<th colspan="1">Balance</th>
@@ -536,6 +537,7 @@ frappe.pages["dealer-ledger"].on_page_load = function (wrapper) {
 				</tr>
 				<tr>
 					<th class="col-sl">Sl#</th>
+					<th>Dealer / Customer</th>
 					<th>Date</th>
 					<th>Transport Name</th>
 					<th>Booking / Deposit Slip No</th>

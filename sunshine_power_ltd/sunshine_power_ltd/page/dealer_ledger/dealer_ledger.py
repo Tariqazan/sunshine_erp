@@ -505,8 +505,8 @@ def _generate_dealer_ledger_pdf(html: str) -> bytes:
 	stylesheet = CSS(
 		string="""
 		@page {
-			size: A4;
-			margin: 14mm 12mm 16mm;
+			size: A4 landscape;
+			margin: 10mm 10mm 12mm;
 		}
 		"""
 	)
