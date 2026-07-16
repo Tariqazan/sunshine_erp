@@ -198,7 +198,7 @@
 				<th>Date</th>
 				<th>Type</th>
 				<th>Reference</th>
-				<th>Customer</th>
+				<th>Showroom</th>
 				<th>Transport</th>
 				<th>Booking / Slip No</th>
 				<th class="num">Qty</th>
@@ -212,12 +212,12 @@
 		</thead>
 		<tbody>
 			{% for row in rows %}
-			<tr class="{% if row.entry_type == 'payment' %}row-payment{% endif %}">
+			<tr class="{% if row.entry_type == "payment" %}row-payment{% endif %}">
 				<td class="center">{{ row.entry_sl }}</td>
 				<td>{{ row.date_display }}</td>
-				<td class="type-cell">{% if row.entry_type == 'payment' %}Advance Payment{% else %}Invoice{% endif %}</td>
+				<td class="type-cell">{% if row.entry_type == "payment" %}Advance Payment{% else %}Invoice{% endif %}</td>
 				<td>{{ row.invoice_name }}</td>
-				<td>{{ row.customer }}</td>
+				<td>{{ row.showroom_name or row.customer }}</td>
 				<td>{{ row.transport_name or "—" }}</td>
 				<td>{{ row.booking_deposit_slip_no or "—" }}</td>
 				<td class="num">{{ row.total_qty }}</td>
