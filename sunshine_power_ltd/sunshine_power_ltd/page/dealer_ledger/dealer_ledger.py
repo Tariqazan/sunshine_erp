@@ -12,7 +12,7 @@ DEALER_LEDGER_ADMIN_ROLES = frozenset({
 })
 
 PDF_MAX_INVOICES = 500
-_TEMPLATE_PATH = Path(__file__).parent / "dealer_ledger_pdf.html"
+_TEMPLATE_PATH = Path(__file__).parent / "print_templates" / "dealer_ledger_pdf.html"
 
 
 def _can_view_all_sales_users(user=None):
