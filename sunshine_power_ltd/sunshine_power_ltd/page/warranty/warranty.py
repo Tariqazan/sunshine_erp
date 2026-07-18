@@ -335,17 +335,21 @@ def load_sales_invoice(sales_invoice):
 		frappe.throw(_("Please search the original Sales Invoice, not a return."))
 
 	active_returns = _get_active_returns(sales_invoice)
+	pending_return = active_returns[0] if active_returns else None
+	return_invoice_name = (pending_return or {}).get("name") if pending_return else None
+
 	requested_map = _aggregate_return_items(active_returns)
-	prepared_map = _get_prepared_qty_map(sales_invoice)
-	completed_map = _get_completed_qty_map(sales_invoice)
-	received_map = _get_received_qty_map(sales_invoice)
+	# Scope prepared/received/completed to the current claim cycle so quantities
+	# from earlier warranty claims on the same invoice don't leak in.
+	prepared_map = _get_prepared_qty_map(sales_invoice, return_invoice_name)
+	completed_map = _get_completed_qty_map(sales_invoice, return_invoice_name)
+	received_map = _get_received_qty_map(sales_invoice, return_invoice_name)
 	history = get_claim_history(sales_invoice)
 
-	pending_return = active_returns[0] if active_returns else None
 	# Fall back to Requested for claims created before the status field was added.
 	claim_status = (pending_return or {}).get("warranty_status") or (STATUS_REQUESTED if pending_return else "")
 	product_condition = (pending_return or {}).get("product_condition") or ""
-	pending_delivery_note = _get_draft_replacement_dn(sales_invoice)
+	pending_delivery_note = _get_draft_replacement_dn(sales_invoice, return_invoice_name)
 
 	items = []
 	for row in si.items:
@@ -454,13 +458,22 @@ def _aggregate_return_items(returns):
 	return {row.sales_invoice_item: _flt(row.qty) for row in rows}
 
 
-def _get_prepared_qty_map(sales_invoice):
+def _warranty_dn_scope(return_invoice):
+	"""Filter Delivery Notes to a single claim cycle when the return-link field
+	exists, otherwise fall back to invoice-wide (pre-patch data)."""
+	if return_invoice and _has_warranty_field("Delivery Note", "custom_warranty_return_invoice"):
+		return "AND dn.custom_warranty_return_invoice = %(scope)s", return_invoice
+	return "AND dn.custom_warranty_sales_invoice = %(scope)s", None
+
+
+def _get_prepared_qty_map(sales_invoice, return_invoice=None):
 	"""Qty sitting in DRAFT warranty Delivery Notes (Ready, not handed over)."""
 	if not _has_warranty_field("Delivery Note", "custom_warranty_sales_invoice"):
 		return {}
 	replacement_filter = ""
 	if _has_warranty_field("Delivery Note", "custom_is_warranty_replacement"):
 		replacement_filter = "AND IFNULL(dn.custom_is_warranty_replacement, 0) = 1"
+	scope_filter, scoped = _warranty_dn_scope(return_invoice)
 
 	rows = frappe.db.sql(
 		f"""
@@ -468,25 +481,26 @@ def _get_prepared_qty_map(sales_invoice):
 		FROM `tabDelivery Note Item` dni
 		INNER JOIN `tabDelivery Note` dn ON dn.name = dni.parent
 		WHERE dn.docstatus = 0
-			AND dn.custom_warranty_sales_invoice = %s
+			{scope_filter}
 			AND dni.si_detail IS NOT NULL
 			AND dni.si_detail != ''
 			{replacement_filter}
 		GROUP BY dni.si_detail
 		""",
-		sales_invoice,
+		{"scope": scoped or sales_invoice},
 		as_dict=True,
 	)
 	return {row.sales_invoice_item: _flt(row.qty) for row in rows}
 
 
-def _get_completed_qty_map(sales_invoice):
+def _get_completed_qty_map(sales_invoice, return_invoice=None):
 	"""Qty handed over via SUBMITTED warranty Delivery Notes."""
 	if not _has_warranty_field("Delivery Note", "custom_warranty_sales_invoice"):
 		return {}
 	replacement_filter = ""
 	if _has_warranty_field("Delivery Note", "custom_is_warranty_replacement"):
 		replacement_filter = "AND IFNULL(dn.custom_is_warranty_replacement, 0) = 1"
+	scope_filter, scoped = _warranty_dn_scope(return_invoice)
 
 	rows = frappe.db.sql(
 		f"""
@@ -494,25 +508,29 @@ def _get_completed_qty_map(sales_invoice):
 		FROM `tabDelivery Note Item` dni
 		INNER JOIN `tabDelivery Note` dn ON dn.name = dni.parent
 		WHERE dn.docstatus = 1
-			AND dn.custom_warranty_sales_invoice = %s
+			{scope_filter}
 			AND dni.si_detail IS NOT NULL
 			AND dni.si_detail != ''
 			{replacement_filter}
 		GROUP BY dni.si_detail
 		""",
-		sales_invoice,
+		{"scope": scoped or sales_invoice},
 		as_dict=True,
 	)
 	return {row.sales_invoice_item: _flt(row.qty) for row in rows}
 
 
-def _get_received_qty_map(sales_invoice):
+def _get_received_qty_map(sales_invoice, return_invoice=None):
 	"""Qty received into condition warehouse via Material Receipt Stock Entries."""
 	if not _has_warranty_field("Stock Entry", "custom_warranty_sales_invoice"):
 		return {}
 	se_filter = ""
 	if _has_warranty_field("Stock Entry", "custom_is_warranty_transfer"):
 		se_filter = "AND IFNULL(se.custom_is_warranty_transfer, 0) = 1"
+	if return_invoice and _has_warranty_field("Stock Entry", "custom_warranty_return_invoice"):
+		scope_filter, scoped = "AND se.custom_warranty_return_invoice = %(scope)s", return_invoice
+	else:
+		scope_filter, scoped = "AND se.custom_warranty_sales_invoice = %(scope)s", sales_invoice
 
 	rows = frappe.db.sql(
 		f"""
@@ -521,34 +539,35 @@ def _get_received_qty_map(sales_invoice):
 		INNER JOIN `tabStock Entry` se ON se.name = sed.parent
 		WHERE se.docstatus = 1
 			AND se.purpose = 'Material Receipt'
-			AND se.custom_warranty_sales_invoice = %s
+			{scope_filter}
 			{se_filter}
 		GROUP BY sed.item_code
 		""",
-		sales_invoice,
+		{"scope": scoped},
 		as_dict=True,
 	)
 	return {row.item_code: _flt(row.qty) for row in rows}
 
 
-def _get_draft_replacement_dn(sales_invoice):
+def _get_draft_replacement_dn(sales_invoice, return_invoice=None):
 	if not _has_warranty_field("Delivery Note", "custom_warranty_sales_invoice"):
 		return ""
 	replacement_filter = ""
 	if _has_warranty_field("Delivery Note", "custom_is_warranty_replacement"):
 		replacement_filter = "AND IFNULL(dn.custom_is_warranty_replacement, 0) = 1"
+	scope_filter, scoped = _warranty_dn_scope(return_invoice)
 
 	rows = frappe.db.sql(
 		f"""
 		SELECT dn.name
 		FROM `tabDelivery Note` dn
 		WHERE dn.docstatus = 0
-			AND dn.custom_warranty_sales_invoice = %s
+			{scope_filter}
 			{replacement_filter}
 		ORDER BY dn.creation DESC
 		LIMIT 1
 		""",
-		sales_invoice,
+		{"scope": scoped or sales_invoice},
 	)
 	return rows[0][0] if rows else ""
 
@@ -854,7 +873,8 @@ def receive_warranty_claim(
 	_require_warranty_settle()
 	ignore_permissions = bool(_user_roles().intersection(WARRANTY_SETTLE_ROLES))
 
-	if product_condition not in PRODUCT_CONDITIONS:
+	# Product condition is optional; validate only when one is supplied.
+	if product_condition and product_condition not in PRODUCT_CONDITIONS:
 		frappe.throw(_("Select a valid product condition."))
 	if not condition_warehouse:
 		frappe.throw(_("Select the condition warehouse to receive into."))
@@ -881,6 +901,7 @@ def receive_warranty_claim(
 		condition_warehouse,
 		submit=1,
 		ignore_permissions=ignore_permissions,
+		return_invoice=return_invoice,
 	)
 
 	if _has_warranty_field("Sales Invoice", "custom_warranty_product_condition"):
@@ -904,6 +925,7 @@ def create_warranty_material_receipt(
 	target_warehouse,
 	submit=1,
 	ignore_permissions=False,
+	return_invoice=None,
 ):
 	if not ignore_permissions and not can_warranty_settle():
 		frappe.has_permission("Stock Entry", "create", throw=True)
@@ -925,6 +947,8 @@ def create_warranty_material_receipt(
 	se.posting_date = nowdate()
 	if _has_warranty_field("Stock Entry", "custom_warranty_sales_invoice"):
 		se.custom_warranty_sales_invoice = sales_invoice
+	if return_invoice and _has_warranty_field("Stock Entry", "custom_warranty_return_invoice"):
+		se.custom_warranty_return_invoice = return_invoice
 	if _has_warranty_field("Stock Entry", "custom_is_warranty_transfer"):
 		se.custom_is_warranty_transfer = 1
 
@@ -999,6 +1023,7 @@ def prepare_warranty_replacement(
 		replacement_warehouse,
 		submit=0,
 		ignore_permissions=ignore_permissions,
+		return_invoice=return_invoice,
 	)
 
 	_set_warranty_status(return_invoice, STATUS_READY)
@@ -1018,6 +1043,7 @@ def create_warranty_replacement(
 	replacement_warehouse,
 	submit=0,
 	ignore_permissions=False,
+	return_invoice=None,
 ):
 	if not ignore_permissions and not can_warranty_settle():
 		frappe.has_permission("Delivery Note", "create", throw=True)
@@ -1062,6 +1088,8 @@ def create_warranty_replacement(
 	dn.posting_date = nowdate()
 	if _has_warranty_field("Delivery Note", "custom_warranty_sales_invoice"):
 		dn.custom_warranty_sales_invoice = sales_invoice
+	if return_invoice and _has_warranty_field("Delivery Note", "custom_warranty_return_invoice"):
+		dn.custom_warranty_return_invoice = return_invoice
 	if _has_warranty_field("Delivery Note", "custom_is_warranty_replacement"):
 		dn.custom_is_warranty_replacement = 1
 

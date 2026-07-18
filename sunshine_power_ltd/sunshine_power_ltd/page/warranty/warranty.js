@@ -228,7 +228,6 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 		label: __("Product condition"),
 		fieldtype: "Select",
 		options: "\nDamaged\nSellable\nRepairable",
-		reqd: 1,
 	});
 	controls.condition_wh = make_control(".wc-f-condition-wh", {
 		fieldname: "condition_warehouse",
@@ -626,7 +625,6 @@ frappe.pages["warranty"].on_page_load = function (wrapper) {
 			if (!state.invoice?.sales_invoice) frappe.throw(__("Search an invoice first."));
 			const product_condition = controls.condition.get_value();
 			const condition_warehouse = controls.condition_wh.get_value();
-			if (!product_condition) frappe.throw(__("Select product condition."));
 			if (!condition_warehouse) frappe.throw(__("Select the warehouse to receive into."));
 
 			await frappe.confirm(__("Receive the claimed product into stock?"), async () => {

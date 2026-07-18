@@ -3,7 +3,7 @@ from pathlib import Path
 
 import frappe
 from frappe import _
-from frappe.utils import cint, fmt_money, formatdate, getdate, now_datetime, today
+from frappe.utils import add_days, cint, fmt_money, formatdate, getdate, now_datetime, today
 
 DEALER_LEDGER_ADMIN_ROLES = frozenset({
 	"Administrator",
@@ -467,7 +467,11 @@ def _build_invoice_rows(invoice_names, can_view_purchase_price):
 				"commission_amount_display": _money(i.custom_commission_amount),
 			}
 			if can_view_purchase_price:
-				item_row["purchase_price"] = _flt(i.custom_purchase_price)
+				purchase_price = _flt(i.custom_purchase_price)
+				total_purchase = _flt(i.qty) * purchase_price
+				item_row["purchase_price"] = purchase_price
+				item_row["purchase_price_display"] = _money(purchase_price) if purchase_price else "—"
+				item_row["total_purchase_display"] = _money(total_purchase) if total_purchase else "—"
 			row["items"].append(item_row)
 
 		rows_by_name[inv.invoice_name] = row
@@ -494,6 +498,42 @@ def _summarize_rows(rows):
 		totals["net_deposit"] += _flt(row.get("net_deposit"))
 		totals["balance"] += _flt(row.get("balance_tk"))
 	return {key: _money(val) for key, val in totals.items()}
+
+
+def _compute_opening_balance(customer=None, from_date=None, sales_user=None):
+	"""Outstanding balance carried forward from every ledger entry strictly before
+	from_date, using the same filters and the same balance_tk definition as the
+	period rows. Returns 0 when no from_date is set."""
+	if not from_date:
+		return 0.0
+
+	before = add_days(getdate(from_date), -1)
+	conditions, values, resolved_sales_user = _build_filter_conditions(
+		customer, None, before, sales_user
+	)
+	inv_where = " AND ".join(conditions)
+	invoice_names = frappe.db.sql(
+		f"SELECT name FROM `tabSales Invoice` WHERE {inv_where}", tuple(values), pluck=True
+	)
+
+	advance_names = []
+	if resolved_sales_user is None:
+		pay_conditions, pay_values = _build_payment_conditions(customer, None, before)
+		pay_where = " AND ".join(pay_conditions)
+		advance_names = frappe.db.sql(
+			f"SELECT name FROM `tabPayment Entry` WHERE {pay_where}", tuple(pay_values), pluck=True
+		)
+
+	if not invoice_names and not advance_names:
+		return 0.0
+
+	can_view_purchase_price = _can_view_purchase_price()
+	invoice_rows = _build_invoice_rows(invoice_names, can_view_purchase_price)
+	advance_rows = _build_advance_rows(advance_names, can_view_purchase_price)
+
+	opening = sum(_flt(r.get("balance_tk")) for r in invoice_rows.values())
+	opening += sum(_flt(r.get("balance_tk")) for r in advance_rows.values())
+	return opening
 
 
 def _generate_dealer_ledger_pdf(html: str) -> bytes:
@@ -581,6 +621,11 @@ def download_dealer_ledger_pdf(
 		)
 
 	company = frappe.db.get_default("company") or frappe.get_all("Company", limit=1, pluck="name")[0]
+
+	opening_balance = _compute_opening_balance(customer, from_date, sales_user)
+	period_balance = sum(_flt(r.get("balance_tk")) for r in rows)
+	closing_balance = opening_balance + period_balance
+
 	context = {
 		"title": _("Dealer / Customer Ledger"),
 		"company": company,
@@ -589,6 +634,13 @@ def download_dealer_ledger_pdf(
 		"filters": _filter_labels(customer, from_date, to_date, resolved_sales_user),
 		"totals": _summarize_rows(rows),
 		"rows": rows,
+		"can_view_purchase_price": _can_view_purchase_price(),
+		"opening_balance": _money(opening_balance),
+		"opening_balance_neg": opening_balance < 0,
+		"period_balance": _money(period_balance),
+		"period_balance_neg": period_balance < 0,
+		"closing_balance": _money(closing_balance),
+		"closing_balance_neg": closing_balance < 0,
 		"footer_note": _("Sunshine Power Ltd — Dealer Ledger Report"),
 	}
 
