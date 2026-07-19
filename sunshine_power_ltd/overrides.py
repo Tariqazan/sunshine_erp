@@ -127,6 +127,20 @@ def sales_invoice_on_submit(doc, method=None):
 	_create_sales_expense_journal(doc)
 
 
+def customer_assign_to_creator(doc, method=None):
+	"""On creation, assign the Customer to whoever created it.
+
+	This sets ``custom_assigned_for`` to the creator so a Salesman who adds a
+	customer immediately sees it under their own restricted view. An explicit
+	assignment entered on the form is respected and left untouched.
+	"""
+	if doc.get("custom_assigned_for"):
+		return
+
+	creator = doc.owner or frappe.session.user
+	doc.db_set("custom_assigned_for", creator, update_modified=False)
+
+
 def customer_create_opening_entry(doc, method=None):
 	"""Create an opening-balance Journal Entry the first time a Customer is
 	saved with an Opening Balance.

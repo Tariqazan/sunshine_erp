@@ -139,6 +139,7 @@ has_permission = {
 
 doc_events = {
 	"Customer": {
+		"after_insert": "sunshine_power_ltd.overrides.customer_assign_to_creator",
 		"on_update": "sunshine_power_ltd.overrides.customer_create_opening_entry",
 	},
 	"Payment Entry": {
