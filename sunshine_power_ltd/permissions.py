@@ -96,6 +96,14 @@ def is_sales_invoice_restricted(user: str | None = None) -> bool:
 	return not can_read_all_sales_invoices(user)
 
 
+def _assigned_customers_subquery(user: str) -> str:
+	"""SQL selecting the names of Customers assigned to `user`."""
+	return (
+		f"select name from `tabCustomer` "
+		f"where custom_assigned_for = {frappe.db.escape(user)}"
+	)
+
+
 def get_sales_invoice_permission_query_conditions(user: str | None = None) -> str:
 	if not user:
 		user = frappe.session.user
@@ -103,7 +111,8 @@ def get_sales_invoice_permission_query_conditions(user: str | None = None) -> st
 	if not is_sales_invoice_restricted(user):
 		return ""
 
-	return f"`tabSales Invoice`.custom_sales_user = {frappe.db.escape(user)}"
+	# A restricted (Salesman) user may only see invoices for their own customers.
+	return f"`tabSales Invoice`.customer in ({_assigned_customers_subquery(user)})"
 
 
 def is_customer_restricted(user: str | None = None) -> bool:
@@ -179,13 +188,17 @@ def has_sales_invoice_permission(doc, ptype: str | None = None, user: str | None
 	if _is_new_sales_invoice(doc):
 		return True
 
-	sales_user = doc.get("custom_sales_user")
+	customer = doc.get("customer")
 
-	# Draft saved before custom_sales_user is set — allow creator
-	if doc.docstatus == 0 and not sales_user:
+	# Draft saved before a customer is chosen — allow the creator
+	if doc.docstatus == 0 and not customer:
 		return (doc.get("owner") or user) == user
 
-	return sales_user == user
+	if not customer:
+		return True
+
+	# Only the salesman the customer is assigned to may see the invoice.
+	return frappe.db.get_value("Customer", customer, "custom_assigned_for") == user
 
 
 def before_submit_sales_invoice(doc, method=None):
