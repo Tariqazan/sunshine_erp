@@ -1,6 +1,6 @@
 import frappe
 from frappe import _
-from frappe.utils import add_days, cint, flt
+from frappe.utils import add_days, cint, flt, nowdate
 
 
 def sync_sales_invoice_item_running_price(doc, method=None):
@@ -125,6 +125,91 @@ def sales_invoice_on_submit(doc, method=None):
 
 	# --- 3. Journal Entry for sales expense taken as cash ---
 	_create_sales_expense_journal(doc)
+
+
+def customer_create_opening_entry(doc, method=None):
+	"""Create an opening-balance Journal Entry the first time a Customer is
+	saved with an Opening Balance.
+
+	The created entry's name is stored on ``custom_opening_entry`` so it is
+	never duplicated on later saves. A positive balance is a receivable
+	(debit the customer); a negative balance is an advance (credit the customer).
+	"""
+	opening_balance = flt(doc.get("custom_opening_balance"))
+	if not opening_balance:
+		return
+
+	# Already created — do not post a second opening entry on re-save.
+	if doc.get("custom_opening_entry"):
+		return
+
+	company = (
+		frappe.defaults.get_user_default("Company")
+		or frappe.db.get_single_value("Global Defaults", "default_company")
+	)
+	if not company:
+		frappe.throw(
+			_("Please set a default Company before adding a Customer Opening Balance."),
+			title=_("Opening Entry Error"),
+		)
+
+	from erpnext.accounts.party import get_party_account
+	from erpnext.accounts.doctype.opening_invoice_creation_tool.opening_invoice_creation_tool import (
+		get_temporary_opening_account,
+	)
+
+	receivable_account = get_party_account("Customer", doc.name, company)
+	if not receivable_account:
+		frappe.throw(
+			_("No receivable account found for Customer {0} in company {1}.").format(doc.name, company),
+			title=_("Opening Entry Error"),
+		)
+
+	temporary_opening_account = get_temporary_opening_account(company)
+
+	amount = abs(opening_balance)
+
+	party_entry = {
+		"account": receivable_account,
+		"party_type": "Customer",
+		"party": doc.name,
+		"debit_in_account_currency": amount if opening_balance > 0 else 0,
+		"credit_in_account_currency": 0 if opening_balance > 0 else amount,
+	}
+	opening_entry = {
+		"account": temporary_opening_account,
+		"debit_in_account_currency": 0 if opening_balance > 0 else amount,
+		"credit_in_account_currency": amount if opening_balance > 0 else 0,
+	}
+
+	je = frappe.new_doc("Journal Entry")
+	je.voucher_type = "Opening Entry"
+	je.company = company
+	je.posting_date = nowdate()
+	je.is_opening = "Yes"
+	je.remark = _("Opening balance for Customer {0}").format(doc.name)
+	je.append("accounts", party_entry)
+	je.append("accounts", opening_entry)
+
+	try:
+		je.flags.ignore_permissions = True
+		je.insert()
+		je.submit()
+	except Exception as e:
+		frappe.log_error(
+			message=frappe.get_traceback(),
+			title="Opening Journal Entry failed for Customer {0}".format(doc.name),
+		)
+		frappe.throw(
+			_("Could not create opening Journal Entry for Customer {0}: {1}").format(doc.name, str(e)),
+			title=_("Opening Entry Error"),
+		)
+
+	doc.db_set("custom_opening_entry", je.name, update_modified=False)
+	frappe.msgprint(
+		_("Opening Journal Entry {0} created for Customer opening balance.").format(je.name),
+		alert=True,
+	)
 
 
 def payment_entry_on_submit(doc, method=None):

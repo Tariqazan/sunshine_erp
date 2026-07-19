@@ -21,6 +21,12 @@ SALES_INVOICE_READ_ALL_ROLES = frozenset({
 	"Factory User",
 })
 
+# Users with these roles can see every Customer, unrestricted.
+CUSTOMER_READ_ALL_ROLES = frozenset({
+	"System Admin",
+	"Head Office",
+})
+
 PAYMENT_ENTRY_SUBMIT_ROLES = frozenset({
 	"System Admin",
 	"Accounts",
@@ -98,6 +104,44 @@ def get_sales_invoice_permission_query_conditions(user: str | None = None) -> st
 		return ""
 
 	return f"`tabSales Invoice`.custom_sales_user = {frappe.db.escape(user)}"
+
+
+def is_customer_restricted(user: str | None = None) -> bool:
+	"""A Salesman (and no wider role) may only see customers assigned to them."""
+	if not user:
+		user = frappe.session.user
+	if user == "Administrator":
+		return False
+	roles = frappe.get_roles(user)
+	if CUSTOMER_READ_ALL_ROLES.intersection(roles):
+		return False
+	return "Salesman" in roles
+
+
+def get_customer_permission_query_conditions(user: str | None = None) -> str:
+	if not user:
+		user = frappe.session.user
+
+	if not is_customer_restricted(user):
+		return ""
+
+	return f"`tabCustomer`.custom_assigned_for = {frappe.db.escape(user)}"
+
+
+def has_customer_permission(doc, ptype: str | None = None, user: str | None = None, debug=False):
+	if not user:
+		user = frappe.session.user
+
+	if not is_customer_restricted(user):
+		return True
+
+	if ptype == "create":
+		return True
+
+	if not doc:
+		return True
+
+	return doc.get("custom_assigned_for") == user
 
 
 def _is_new_sales_invoice(doc) -> bool:

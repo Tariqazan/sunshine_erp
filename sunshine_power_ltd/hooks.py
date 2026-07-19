@@ -124,11 +124,13 @@ doctype_js = {"Sales Invoice": "public/js/sales_invoice.js"}
 
 permission_query_conditions = {
 	"Sales Invoice": "sunshine_power_ltd.permissions.get_sales_invoice_permission_query_conditions",
+    "Customer": "sunshine_power_ltd.permissions.get_customer_permission_query_conditions",
 }
 
 has_permission = {
 	"Sales Invoice": "sunshine_power_ltd.permissions.has_sales_invoice_permission",
 	"Payment Entry": "sunshine_power_ltd.permissions.has_payment_entry_permission",
+	"Customer": "sunshine_power_ltd.permissions.has_customer_permission",
 }
 
 # Document Events
@@ -136,6 +138,9 @@ has_permission = {
 # Hook on document methods and events
 
 doc_events = {
+	"Customer": {
+		"on_update": "sunshine_power_ltd.overrides.customer_create_opening_entry",
+	},
 	"Payment Entry": {
 		"validate": "sunshine_power_ltd.permissions.validate_payment_entry_accountant",
 		"before_submit": "sunshine_power_ltd.permissions.before_submit_payment_entry_accountant",
